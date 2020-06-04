@@ -22,9 +22,9 @@
 * Put `gsm_at_rxCallback()` into USART callback.
 * If using TX DMA, put `gsm_at_txCallback()` into dma callback.
 * Select `General peripheral Initalizion as a pair of '.c/.h' file per peripheral` on project settings.
-* Config `gsmConf.h`.
-* Call `gsmInit()`. 
-* Call `gsmProcess()` in infinite loop.
+* Config `gsmConfig.h`.
+* Call `gsm_init()`. 
+* Call `gsm_process()` in infinite loop.
 
 
 
