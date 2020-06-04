@@ -89,27 +89,28 @@ typedef struct
 //##############
 typedef struct
 {
-  char                  status[16];
-  char                  number[16];
   uint8_t               year;
   uint8_t               month;
   uint8_t               day;
   uint8_t               hour;
   uint8_t               minute;
   uint8_t               second;
+  
+}Gsm_msg_time_t;
+//##############
+typedef struct
+{
+  char                  status[16];
+  char                  number[16];
+  Gsm_msg_time_t        time;
   char                  message[1024];
   uint8_t               isTextMode;
   char                  serviceCenterNum[16];
   Gsm_characterSet_t    characterSet;
-  Gsm_msg_storage_t     storageSent;
-  uint8_t               storageSentTotal;               
-  uint8_t               storageSentUsed;               
-  Gsm_msg_storage_t     storageRead;
-  uint8_t               storageReadTotal;               
-  uint8_t               storageReadUsed;               
-  Gsm_msg_storage_t     storageReceived;
-  uint8_t               storageReceivedTotal;               
-  uint8_t               storageReceivedUsed;               
+  uint8_t               storageTotal;               
+  uint8_t               storageUsed;               
+  Gsm_msg_storage_t     storage;
+  uint16_t              newIndex;
   
 }Gsm_msg_t;
 //##############
@@ -166,6 +167,7 @@ void                    gsm_at_txCallback(void);
 void                    gsm_user_init(void);    
 void                    gsm_user_incommingCall(char *number);    
 void                    gsm_user_endCall(void);    
+void                    gsm_user_newMsg(char *msg, Gsm_msg_time_t time);
 
 bool                    gsm_init(void);      
 void                    gsm_process(void);   
@@ -180,11 +182,10 @@ bool                    gsm_msg_read(uint16_t index);
 Gsm_characterSet_t      gsm_msg_getCharacterSet(void);
 bool                    gsm_msg_setCharacterSet(Gsm_characterSet_t Gsm_characterSet_);
 bool                    gsm_msg_updateStorage(void);
-uint8_t                 gsm_msg_getFreeSpaceReceiveStorage(void);
-uint8_t                 gsm_msg_getFreeSpaceSentStorage(void);
-uint8_t                 gsm_msg_getFreeSpaceReadStorage(void);
+uint8_t                 gsm_msg_getFreeSpace(void);
 bool                    gsm_msg_setStorage(Gsm_msg_storage_t Gsm_msg_storage_);
 bool                    gsm_msg_deleteAll(void);
+bool                    gsm_msg_delete(uint16_t index);
 
 bool                    gsm_ussdSend(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t  wait_s);
 

@@ -44,8 +44,16 @@ void gsm_at_foundCllback(const char *foundString, char *str)
   {
     gsm.call.inUse = 0;
     gsm_user_endCall();
-  }
-  
+  } 
+  if (strcmp(foundString, "\r\n+CMTI:") == 0)
+  {
+    char *s = strchr(str, ',');
+    if (s != NULL)
+    {
+      s++;
+      gsm.msg.newIndex = atoi(s);
+    }
+  }    
 }
 //#####################################################################################################
 bool gsm_at_addAutoSearchString(const char *str)
@@ -257,17 +265,17 @@ bool gsm_init(void)
   }
   return 0;
   INIT:
+  gsm.msg.newIndex = 0xFFFF;
   gsm_at_addAutoSearchString("\r\n+CLIP:");
   gsm_at_addAutoSearchString("\r\nNO CARRIER\r\n");
   gsm_at_addAutoSearchString("\r\nNO ANSWER\r\n");
   gsm_at_addAutoSearchString("\r\n+CMTI:");
+  gsm_setEcho(true);
   gsm_at_sendCommand("AT+CNMI=2,1,0,0,0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+COLP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_setEcho(true);
   gsm_getIMEI(NULL);
-  gsm_msg_getCharacterSet();
   gsm_getGlobalObjectIdentification(NULL);
   gsm_getLoadSpeakerLevel();
   gsm_getManufacturerIdentification(NULL);
@@ -279,9 +287,11 @@ bool gsm_init(void)
   gsm_getProductIdentificationInformation(NULL);
   gsm_getRingLevel();
   gsm_getServiceProviderNameFromSimcard(NULL);
-  gsm_getPinStatus();
+  gsm_msg_getCharacterSet();
   gsm_msg_updateStorage();
+  gsm_msg_setTextMode(true);
   gsm_updateEchoCancellationControl();
+  gsm_getPinStatus();
   gsm_user_init();
   gsm.inited = 1;
   return 1;
@@ -289,12 +299,38 @@ bool gsm_init(void)
 //#####################################################################################################
 void gsm_process(void)
 {
+  static uint32_t time10s = 0;
+  if (HAL_GetTick() - time10s > 10000)
+  {
+    time10s = HAL_GetTick();
+    gsm_getSignalQuality();  
+    gsm_msg_updateStorage();
+  }
   if (gsm.at.atBusy == 0)
     gsm_at_process(); 
   if (gsm.call.ringing == 1)
   {
     gsm.call.ringing = 0;
     gsm_user_incommingCall(gsm.call.incommingNumber);
+  }
+  if (gsm.msg.storageUsed > 0)
+  {
+    for (uint16_t i = 0 ; i < 150 ; i++)
+    {
+      if (gsm_msg_read(i))
+      {
+        gsm_user_newMsg(gsm.msg.message, gsm.msg.time);
+        gsm_msg_delete(i);
+      }
+    }
+    gsm_msg_updateStorage();      
+  }
+  if (gsm.msg.newIndex != 0xFFFF)
+  {
+    gsm_msg_read(gsm.msg.newIndex);
+    gsm_user_newMsg(gsm.msg.message, gsm.msg.time);
+    gsm_msg_delete(gsm.msg.newIndex);
+    gsm.msg.newIndex = 0xFFFF;
   }    
 }
 //#####################################################################################################
@@ -904,17 +940,50 @@ bool gsm_msg_isTextMode(void)
 //#####################################################################################################
 bool gsm_msg_read(uint16_t index)
 {
+//  if (gsm.msg.isTextMode == 1)
+//  {
+//    char str[20];
+//    char str2[1024 + 64]; 
+//    sprintf(str, "AT+CMGR=%d\r\n", index);  
+//    if (gsm_at_sendCommand(str, 5000, str2, sizeof(str2), 3, "\r\n+CMGR:", "\r\nOK\r\n","\r\nERROR\r\n") != 1)
+//      return 0;
+//    sscanf(str2, "\r\n+CMGR: \"%[^\"]\",\"%[^\"]\",\"\",\"%hhd/%hhd/%hhd,%hhd:%hhd:%hhd%*d\"",
+//      gsm.msg.status, gsm.msg.number, &gsm.msg.time.year, &gsm.msg.time.month, &gsm.msg.time.day , &gsm.msg.time.hour, &gsm.msg.time.minute, &gsm.msg.time.second);
+//    uint8_t cnt = 0;
+//    char *s = strtok(str2, "\"");
+//    while( s != NULL)
+//    {
+//      s = strtok(NULL, "\"");
+//      if (cnt == 6)
+//      {
+//        s+=2;
+//        char *end = strstr(s, "\r\nOK\r\n");
+//        if (end != NULL)
+//        {
+//          strncpy(gsm.msg.message, s, end - s);
+//          return 1;
+//        }
+//        else
+//          return 0;
+//      }
+//      cnt++;    
+//    }
+//  }
+//  else
+//  {
+//    return 0;
+//  }
+//  return 0;
   if (gsm.msg.isTextMode == 1)
   {
     char str[20];
-    char str2[1024 + 64]; 
     sprintf(str, "AT+CMGR=%d\r\n", index);  
-    if (gsm_at_sendCommand(str, 5000, str2, sizeof(str2), 3, "\r\n+CMGR:", "\r\nOK\r\n","\r\nERROR\r\n") != 1)
+    if (gsm_at_sendCommand(str, 5000, gsm.msg.message, sizeof(gsm.msg.message), 3, "\r\n+CMGR:", "\r\nOK\r\n","\r\nERROR\r\n") != 1)
       return 0;
-    sscanf(str2, "\r\n+CMGR: \"%[^\"]\",\"%[^\"]\",\"\",\"%hhd/%hhd/%hhd,%hhd:%hhd:%hhd%*d\"",
-      gsm.msg.status, gsm.msg.number, &gsm.msg.year, &gsm.msg.month, &gsm.msg.day , &gsm.msg.hour, &gsm.msg.minute, &gsm.msg.second);
+    sscanf(gsm.msg.message, "\r\n+CMGR: \"%[^\"]\",\"%[^\"]\",\"\",\"%hhd/%hhd/%hhd,%hhd:%hhd:%hhd%*d\"",
+      gsm.msg.status, gsm.msg.number, &gsm.msg.time.year, &gsm.msg.time.month, &gsm.msg.time.day , &gsm.msg.time.hour, &gsm.msg.time.minute, &gsm.msg.time.second);
     uint8_t cnt = 0;
-    char *s = strtok(str2, "\"");
+    char *s = strtok(gsm.msg.message, "\"");
     while( s != NULL)
     {
       s = strtok(NULL, "\"");
@@ -924,7 +993,8 @@ bool gsm_msg_read(uint16_t index)
         char *end = strstr(s, "\r\nOK\r\n");
         if (end != NULL)
         {
-          strncpy(gsm.msg.message, s, end - s);
+          strncpy(&gsm.msg.message[0], s, end - s);
+          memset(&gsm.msg.message[end - s], 0 , sizeof(gsm.msg.message) - (end - s));
           return 1;
         }
         else
@@ -943,49 +1013,23 @@ bool gsm_msg_read(uint16_t index)
 bool gsm_msg_updateStorage(void)
 {
   char str[64];
-  char s[3][5]; 
+  char s[5]; 
   if (gsm_at_sendCommand("AT+CPMS?\r\n", 1000 , str, sizeof(str), 2, "\r\n+CPMS:", "\r\nERROR\r\n") != 1)
     return 0;
-  if (sscanf(str, "\r\n+CPMS: \"%[^\"]\",%hhd,%hhd,\"%[^\"]\",%hhd,%hhd,\"%[^\"]\",%hhd,%hhd\r\n", s[0], &gsm.msg.storageReadUsed, &gsm.msg.storageReadTotal,\
-    s[1], &gsm.msg.storageSentUsed, &gsm.msg.storageSentTotal,\
-    s[2], &gsm.msg.storageReceivedUsed, &gsm.msg.storageReceivedTotal) != 9)
+  if (sscanf(str, "\r\n+CPMS: \"%[^\"]\",%*hhd,%*hhd,\"%*[^\"]\",%*hhd,%*hhd,\"%*[^\"]\",%hhd,%hhd\r\n", s, &gsm.msg.storageUsed, &gsm.msg.storageTotal) != 3)
     return 0;
-  if (strcmp(s[0], "SM") == 0)
-    gsm.msg.storageRead = Gsm_msg_storage_SIMCARD;
-  else if (strcmp(s[0], "ME") == 0)
-    gsm.msg.storageRead = Gsm_msg_storage_MODULE;
-  else if (strcmp(s[0], "SM_P") == 0)
-    gsm.msg.storageRead = Gsm_msg_storage_SIMCARD_PREFERRED;
-  else if (strcmp(s[0], "ME_P") == 0)
-    gsm.msg.storageRead = Gsm_msg_storage_MODULE_PREFERRED;
-  else if (strcmp(s[0], "MT") == 0)
-    gsm.msg.storageRead = Gsm_msg_storage_SIMCARD_OR_MODULE;
+  if (strcmp(s, "SM") == 0)
+    gsm.msg.storage = Gsm_msg_storage_SIMCARD;
+  else if (strcmp(s, "ME") == 0)
+    gsm.msg.storage = Gsm_msg_storage_MODULE;
+  else if (strcmp(s, "SM_P") == 0)
+    gsm.msg.storage = Gsm_msg_storage_SIMCARD_PREFERRED;
+  else if (strcmp(s, "ME_P") == 0)
+    gsm.msg.storage = Gsm_msg_storage_MODULE_PREFERRED;
+  else if (strcmp(s, "MT") == 0)
+    gsm.msg.storage = Gsm_msg_storage_SIMCARD_OR_MODULE;
   else
-    gsm.msg.storageRead = Gsm_msg_storage_ERROR;
-  if (strcmp(s[1], "SM") == 0)
-    gsm.msg.storageSent = Gsm_msg_storage_SIMCARD;
-  else if (strcmp(s[1], "ME") == 0)
-    gsm.msg.storageSent = Gsm_msg_storage_MODULE;
-  else if (strcmp(s[1], "SM_P") == 0)
-    gsm.msg.storageSent = Gsm_msg_storage_SIMCARD_PREFERRED;
-  else if (strcmp(s[1], "ME_P") == 0)
-    gsm.msg.storageSent = Gsm_msg_storage_MODULE_PREFERRED;
-  else if (strcmp(s[1], "MT") == 0)
-    gsm.msg.storageSent = Gsm_msg_storage_SIMCARD_OR_MODULE;
-  else
-    gsm.msg.storageSent = Gsm_msg_storage_ERROR;
-  if (strcmp(s[2], "SM") == 0)
-    gsm.msg.storageReceived = Gsm_msg_storage_SIMCARD;
-  else if (strcmp(s[2], "ME") == 0)
-    gsm.msg.storageReceived = Gsm_msg_storage_MODULE;
-  else if (strcmp(s[2], "SM_P") == 0)
-    gsm.msg.storageReceived = Gsm_msg_storage_SIMCARD_PREFERRED;
-  else if (strcmp(s[2], "ME_P") == 0)
-    gsm.msg.storageReceived = Gsm_msg_storage_MODULE_PREFERRED;
-  else if (strcmp(s[2], "MT") == 0)
-    gsm.msg.storageReceived = Gsm_msg_storage_SIMCARD_OR_MODULE;
-  else
-    gsm.msg.storageReceived = Gsm_msg_storage_ERROR;
+    gsm.msg.storage = Gsm_msg_storage_ERROR;
   return 1;
 }
 //#####################################################################################################
@@ -1026,26 +1070,23 @@ bool gsm_msg_deleteAll(void)
   
 }
 //#####################################################################################################
-uint8_t gsm_msg_getFreeSpaceReceiveStorage(void)
+uint8_t gsm_msg_getFreeSpace(void)
 {
   if (gsm_msg_updateStorage() == 0)
     return 0;
-  return gsm.msg.storageReceivedTotal - gsm.msg.storageReceivedUsed;  
+  return gsm.msg.storageTotal - gsm.msg.storageUsed;  
 }
 //#####################################################################################################
-uint8_t gsm_msg_getFreeSpaceSentStorage(void)
+bool gsm_msg_delete(uint16_t index)
 {
-  if (gsm_msg_updateStorage() == 0)
-    return 0;
-  return gsm.msg.storageSentTotal - gsm.msg.storageSentUsed;
+  char str[32];
+  sprintf(str, "AT+CMGD=%d\r\n", index);
+  if (gsm_at_sendCommand(str, 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") == 1)
+    return 1;    
+  return 0;  
 }
 //#####################################################################################################
-uint8_t gsm_msg_getFreeSpaceReadStorage(void)
-{
-  if (gsm_msg_updateStorage() == 0)
-    return 0;
-  return gsm.msg.storageReadTotal - gsm.msg.storageReadUsed;
-}
+//#######################               GSM VOICE             #########################################
 //#####################################################################################################
 bool gsm_updateEchoCancellationControl(void)
 {
