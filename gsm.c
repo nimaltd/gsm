@@ -53,7 +53,11 @@ void gsm_at_foundCllback(const char *foundString, char *str)
       s++;
       gsm.msg.newIndex = atoi(s);
     }
-  }    
+  }
+  if (strcmp(foundString, "POWER DOWN\r\n") == 0)  
+  {
+    gsm.powerUp = 0;    
+  }
 }
 //#####################################################################################################
 bool gsm_at_addAutoSearchString(const char *str)
@@ -240,6 +244,7 @@ bool gsm_init(void)
 {
   if (gsm.inited == 1)
     return 0;
+  gsm.inited = 1;
   LL_GPIO_SetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
   memset(&gsm, 0, sizeof(gsm));    
   #if _GSM_TXDMA_ENABLE == 1
@@ -247,54 +252,14 @@ bool gsm_init(void)
   LL_USART_EnableDMAReq_TX(_GSM_USART);
   #endif
   LL_USART_EnableIT_RXNE(_GSM_USART);
-  while (HAL_GetTick() < 1000)
-    gsm_delay(1);
-  for (uint8_t i = 0; i < 10 ; i++)
-  {
-    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1) 
-    goto INIT;
-  }
-  LL_GPIO_ResetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
-  gsm_delay(1200);
-  LL_GPIO_SetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
-  gsm_delay(2000);
-  for (uint8_t i = 0; i < 10 ; i++)
-  {
-    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1) 
-      goto INIT;
-  }
-  return 0;
-  INIT:
-  gsm.msg.newIndex = 0xFFFF;
   gsm_at_addAutoSearchString("\r\n+CLIP:");
   gsm_at_addAutoSearchString("\r\nNO CARRIER\r\n");
   gsm_at_addAutoSearchString("\r\nNO ANSWER\r\n");
   gsm_at_addAutoSearchString("\r\n+CMTI:");
-  gsm_setEcho(true);
-  gsm_at_sendCommand("AT+CNMI=2,1,0,0,0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_at_sendCommand("AT+COLP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_getIMEI(NULL);
-  gsm_getGlobalObjectIdentification(NULL);
-  gsm_getLoadSpeakerLevel();
-  gsm_getManufacturerIdentification(NULL);
-  gsm_getMicrophoneGainLevel_auxChannel();
-  gsm_getMicrophoneGainLevel_auxChannelHF();
-  gsm_getMicrophoneGainLevel_mainChannel();
-  gsm_getMicrophoneGainLevel_mainChannelHF();
-  gsm_getModelIdentification(NULL);
-  gsm_getProductIdentificationInformation(NULL);
-  gsm_getRingLevel();
-  gsm_getServiceProviderNameFromSimcard(NULL);
-  gsm_msg_getCharacterSet();
-  gsm_msg_updateStorage();
-  gsm_msg_setTextMode(true);
-  gsm_updateEchoCancellationControl();
-  gsm_getPinStatus();
-  gsm_user_init();
-  gsm.inited = 1;
-  return 1;
+  gsm_at_addAutoSearchString("POWER DOWN\r\n");
+  while (HAL_GetTick() < 1000)
+    gsm_delay(1);
+  return gsm_powerOn();
 }
 //#####################################################################################################
 void gsm_process(void)
@@ -319,7 +284,7 @@ void gsm_process(void)
     {
       if (gsm_msg_read(i))
       {
-        gsm_user_newMsg(gsm.msg.message, gsm.msg.time);
+        gsm_user_newMsg(gsm.msg.message, gsm.msg.number ,gsm.msg.time);
         gsm_msg_delete(i);
       }
     }
@@ -328,11 +293,74 @@ void gsm_process(void)
   if (gsm.msg.newIndex != 0xFFFF)
   {
     gsm_msg_read(gsm.msg.newIndex);
-    gsm_user_newMsg(gsm.msg.message, gsm.msg.time);
+    gsm_user_newMsg(gsm.msg.message, gsm.msg.number, gsm.msg.time);
     gsm_msg_delete(gsm.msg.newIndex);
     gsm.msg.newIndex = 0xFFFF;
   }    
 }
+//#####################################################################################################
+bool gsm_powerOff(void)
+{
+  if (gsm_at_sendCommand("AT+CPOWD=1\r\n", 1000, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") == 1)
+  {
+    gsm.powerUp = 0;
+    return 1;
+  }  
+  LL_GPIO_ResetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
+  gsm_delay(1200);
+  LL_GPIO_SetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
+  if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1)
+    return 0;
+  gsm.powerUp = 0;
+  return 1;
+}  
+//#####################################################################################################
+bool gsm_powerOn(void)
+{
+  
+  for (uint8_t i = 0; i < 10 ; i++)
+  {
+    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1) 
+    goto INIT;
+  }
+  LL_GPIO_ResetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
+  gsm_delay(1200);
+  LL_GPIO_SetOutputPin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN);
+  gsm_delay(2000);
+  for (uint8_t i = 0; i < 10 ; i++)
+  {
+    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1) 
+      goto INIT;
+  }
+  return 0;
+  INIT:
+  gsm.msg.newIndex = 0xFFFF;
+  gsm_setEcho(true);
+  gsm_at_sendCommand("AT+CNMI=2,1,0,0,0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_at_sendCommand("AT+COLP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_getIMEI(NULL);
+  gsm_getGlobalObjectIdentification(NULL);
+  gsm_getLoadSpeakerLevel();
+  gsm_getManufacturerIdentification(NULL);
+  gsm_getMicrophoneGainLevel_auxChannel();
+  gsm_getMicrophoneGainLevel_auxChannelHF();
+  gsm_getMicrophoneGainLevel_mainChannel();
+  gsm_getMicrophoneGainLevel_mainChannelHF();
+  gsm_getModelIdentification(NULL);
+  gsm_getProductIdentificationInformation(NULL);
+  gsm_getRingLevel();
+  gsm_getServiceProviderNameFromSimcard(NULL);
+  gsm_msg_getCharacterSet();
+  gsm_msg_updateStorage();
+  gsm_msg_setTextMode(true);
+  gsm_updateEchoCancellationControl();
+  gsm_getPinStatus();
+  gsm_user_init();
+  gsm.powerUp = 1;
+  return 1;
+}  
 //#####################################################################################################
 bool gsm_getRegisteredStatus(void)
 {
@@ -940,40 +968,6 @@ bool gsm_msg_isTextMode(void)
 //#####################################################################################################
 bool gsm_msg_read(uint16_t index)
 {
-//  if (gsm.msg.isTextMode == 1)
-//  {
-//    char str[20];
-//    char str2[1024 + 64]; 
-//    sprintf(str, "AT+CMGR=%d\r\n", index);  
-//    if (gsm_at_sendCommand(str, 5000, str2, sizeof(str2), 3, "\r\n+CMGR:", "\r\nOK\r\n","\r\nERROR\r\n") != 1)
-//      return 0;
-//    sscanf(str2, "\r\n+CMGR: \"%[^\"]\",\"%[^\"]\",\"\",\"%hhd/%hhd/%hhd,%hhd:%hhd:%hhd%*d\"",
-//      gsm.msg.status, gsm.msg.number, &gsm.msg.time.year, &gsm.msg.time.month, &gsm.msg.time.day , &gsm.msg.time.hour, &gsm.msg.time.minute, &gsm.msg.time.second);
-//    uint8_t cnt = 0;
-//    char *s = strtok(str2, "\"");
-//    while( s != NULL)
-//    {
-//      s = strtok(NULL, "\"");
-//      if (cnt == 6)
-//      {
-//        s+=2;
-//        char *end = strstr(s, "\r\nOK\r\n");
-//        if (end != NULL)
-//        {
-//          strncpy(gsm.msg.message, s, end - s);
-//          return 1;
-//        }
-//        else
-//          return 0;
-//      }
-//      cnt++;    
-//    }
-//  }
-//  else
-//  {
-//    return 0;
-//  }
-//  return 0;
   if (gsm.msg.isTextMode == 1)
   {
     char str[20];
@@ -1066,8 +1060,7 @@ bool gsm_msg_deleteAll(void)
     if (gsm_at_sendCommand("AT+CMGDA=6\r\n", 25000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
       return 0;    
     return 1;    
-  }
-  
+  }  
 }
 //#####################################################################################################
 uint8_t gsm_msg_getFreeSpace(void)

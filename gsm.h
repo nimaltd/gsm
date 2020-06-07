@@ -1,6 +1,22 @@
 #ifndef _GSM_H
 #define _GSM_H
 
+/*
+  Author:     Nima Askari
+  WebSite:    http://www.github.com/NimaLTD
+  Instagram:  http://instagram.com/github.NimaLTD
+  Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
+  
+  Version:    3.0.0
+  
+  
+  Reversion History:
+  
+  (3.0.0)
+  Rewrite again.
+
+*/
+
 #include "gsmConfig.h"
 #include "usart.h"
 #include <stdbool.h>
@@ -152,6 +168,7 @@ typedef struct
 typedef struct
 {
   uint8_t               inited;
+  uint8_t               powerUp;
   Gsm_atCommand_t       at;
   Gsm_config_t          config;
   Gsm_msg_t             msg;
@@ -161,20 +178,20 @@ typedef struct
 //##############
 extern Gsm_t            gsm;
 //######################################################################################
-void                    gsm_at_rxCallback(void);  
-void                    gsm_at_txCallback(void);
+void                    gsm_at_rxCallback(void);                          //  rx irq  
+void                    gsm_at_txCallback(void);                          //  dma tx callback, if use txdma
 
-void                    gsm_user_init(void);    
-void                    gsm_user_incommingCall(char *number);    
-void                    gsm_user_endCall(void);    
-void                    gsm_user_newMsg(char *msg, Gsm_msg_time_t time);
+void                    gsm_user_init(void);                              //  auto call after init    
+void                    gsm_user_incommingCall(char *number);             //  auto call after ringing
+void                    gsm_user_endCall(void);                           //  auto call after end call
+void                    gsm_user_newMsg(char *msg, char *number, Gsm_msg_time_t time);  //  auto call after receive new msg
 
-bool                    gsm_init(void);      
-void                    gsm_process(void);   
+bool                    gsm_init(void);                                   //  init gsm
+void                    gsm_process(void);                                //  call in infinite loop    
 
-bool                    gsm_callAnswer(void);
-bool                    gsm_callEnd(void);
-bool                    gsm_call(char *number, uint8_t wait_s);
+bool                    gsm_callAnswer(void);                             //  answer incomming call
+bool                    gsm_callEnd(void);                                //  end call
+bool                    gsm_call(char *number, uint8_t wait_s);           //  dial
 
 bool                    gsm_msg_setTextMode(bool enable);
 bool                    gsm_msg_isTextMode(void);
@@ -189,6 +206,8 @@ bool                    gsm_msg_delete(uint16_t index);
 
 bool                    gsm_ussdSend(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t  wait_s);
 
+bool                    gsm_powerOff(void);
+bool                    gsm_powerOn(void);
 bool                    gsm_getRegisteredStatus(void);
 uint8_t                 gsm_getSignalQuality(void);
 bool                    gsm_sendDtmf(char *dtmfString, uint16_t duration_ms);
