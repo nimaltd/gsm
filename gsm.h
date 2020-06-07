@@ -203,6 +203,7 @@ uint8_t                 gsm_msg_getFreeSpace(void);
 bool                    gsm_msg_setStorage(Gsm_msg_storage_t Gsm_msg_storage_);
 bool                    gsm_msg_deleteAll(void);
 bool                    gsm_msg_delete(uint16_t index);
+bool                    gsm_msg_send(char *msg, char *number);
 
 bool                    gsm_ussdSend(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t  wait_s);
 

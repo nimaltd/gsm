@@ -1079,6 +1079,27 @@ bool gsm_msg_delete(uint16_t index)
   return 0;  
 }
 //#####################################################################################################
+bool gsm_msg_send(char *msg, char *number)
+{
+  if (gsm.msg.isTextMode)
+  {
+    char str[32];
+    sprintf(str, "AT+CMGS=\"%s\"\r\n", number);
+    if (gsm_at_sendCommand(str, 5000 , NULL, 0, 2, "\r\r\n> ", "\r\nERROR\r\n") != 1)
+    {
+      sprintf(str, "%c", 27);
+      gsm_at_sendCommand(str, 1000, NULL, 0, 0);
+      return 0;    
+    }
+    sprintf(gsm.msg.message, "%s%c", msg, 26);
+    if (gsm_at_sendCommand(gsm.msg.message, 60000 , NULL, 0, 2, "\r\n+CMGS:", "\r\nERROR\r\n") != 1)    
+      return 0;
+    return 1;    
+  }
+  else
+    return false;
+}
+//#####################################################################################################
 //#######################               GSM VOICE             #########################################
 //#####################################################################################################
 bool gsm_updateEchoCancellationControl(void)
