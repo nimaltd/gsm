@@ -20,7 +20,7 @@
 * Enable USART (LL Library) and RX interrupt.
 * Set a Gpio as output open drain to connect gsm power pin.
 * Put `gsm_at_rxCallback()` into USART callback.
-* If using TX DMA, put `gsm_at_txCallback()` into dma callback.
+* If using TX DMA, put `gsm_at_txCallback()` into dma callback. ( not tested yet)
 * Select `General peripheral Initalizion as a pair of '.c/.h' file per peripheral` on project settings.
 * Config `gsmConfig.h`.
 * Call `gsm_init()`. 
