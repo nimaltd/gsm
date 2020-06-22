@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    3.0.0
+  Version:    3.0.1
   
   
   Reversion History:
+  
+  (3.0.1)
+  Fix CharacterSet.
   
   (3.0.0)
   Rewrite again.

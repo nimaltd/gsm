@@ -352,7 +352,7 @@ bool gsm_powerOn(void)
   gsm_getProductIdentificationInformation(NULL);
   gsm_getRingLevel();
   gsm_getServiceProviderNameFromSimcard(NULL);
-  gsm_msg_getCharacterSet();
+  gsm_msg_setCharacterSet(Gsm_characterSet_GSM);
   gsm_msg_updateStorage();
   gsm_msg_setTextMode(true);
   gsm_updateEchoCancellationControl();
@@ -766,25 +766,25 @@ bool gsm_msg_setCharacterSet(Gsm_characterSet_t Gsm_characterSet_)
   switch (Gsm_characterSet_)
   {
     case Gsm_characterSet_8859_1:
-      sprintf(str, "AT+CSCS=8859-1\r\n");        
+      sprintf(str, "AT+CSCS=\"8859-1\"\r\n");        
     break;
     case Gsm_characterSet_GSM:
-      sprintf(str, "AT+CSCS=GSM\r\n");        
+      sprintf(str, "AT+CSCS=\"GSM\"\r\n");        
     break;
     case Gsm_characterSet_HEX:
-      sprintf(str, "AT+CSCS=HEX\r\n");        
+      sprintf(str, "AT+CSCS=\"HEX\"\r\n");        
     break;
     case Gsm_characterSet_IRA:
-      sprintf(str, "AT+CSCS=IRA\r\n");        
+      sprintf(str, "AT+CSCS=\"IRA\"\r\n");        
     break;
     case Gsm_characterSet_PCCP:
-      sprintf(str, "AT+CSCS=PCCP\r\n");        
+      sprintf(str, "AT+CSCS=\"PCCP\"\r\n");        
     break;
     case Gsm_characterSet_PCDN:
-      sprintf(str, "AT+CSCS=PCDN\r\n");        
+      sprintf(str, "AT+CSCS=\"PCDN\"\r\n");        
     break;
     case Gsm_characterSet_UCS2:
-      sprintf(str, "AT+CSCS=UCS2\r\n");        
+      sprintf(str, "AT+CSCS=\"UCS2\"\r\n");        
     break;
     default:
       return 0;   
