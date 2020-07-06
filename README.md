@@ -6,11 +6,11 @@
 --------------------------------------------------------------------------------
 * [x] CMSIS V1 Supported.
 * [ ] CMSIS V2 Supported.
-
+--------------------------------------------------------------------------------
 * [x] SIM800C tested.
 * [ ] SIM800 tested.
 * [ ] SIM800A tested.
-    
+--------------------------------------------------------------------------------    
 * [ ] F0 tested.
 * [ ] L0 tested.
 * [x] F1 tested.
@@ -21,8 +21,7 @@
 * [ ] L4 tested.
 * [ ] F7 tested.
 * [ ] H7 tested.
-    
-
+--------------------------------------------------------------------------------   
 * Enable USART (LL Library) and RX interrupt.
 * Set a Gpio as output open drain to connect gsm power pin.
 * Put `gsm_at_rxCallback()` into USART callback.
