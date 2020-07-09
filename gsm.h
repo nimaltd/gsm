@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.0.0
+  Version:    4.0.1
   
   
   Reversion History:
+
+  (4.0.1)
+  Solve power on problem.
   
   (4.0.0)
   New release.

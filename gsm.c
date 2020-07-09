@@ -180,7 +180,7 @@ bool gsm_power(bool on_off)
 {
   if (on_off)
   {
-    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") == 1)
+    if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") == 1)
     {
       gsm.power = 1;
       gsm_init_config();
@@ -192,7 +192,7 @@ bool gsm_power(bool on_off)
     osDelay(2000);    
     for (uint8_t  i = 0; i < 10; i++)
     {
-      if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 1)
+      if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 1)
       {
         gsm.power = 1;
         gsm_init_config();
@@ -204,7 +204,7 @@ bool gsm_power(bool on_off)
   }
   else
   {
-    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 0)
+    if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 0)
     {
       gsm.ready = 0;
       gsm.power = 0;
@@ -214,7 +214,7 @@ bool gsm_power(bool on_off)
     osDelay(1200);
     HAL_GPIO_WritePin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN, GPIO_PIN_SET);
     osDelay(2000);    
-    if (gsm_at_sendCommand("AT\r\n", 100, NULL, 0, 1, "\r\nOK\r\n") == 0)
+    if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 0)
     {
       gsm.ready = 0;
       gsm.power = 0;
@@ -315,24 +315,34 @@ void gsm_init_config(void)
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  if (gsm_at_sendCommand("AT+CPIN?\r\n", 1000, str1, sizeof(str1), 2, "\r\n+CPIN:", "\r\nERROR\r\n") == 1)
+  for (uint8_t i = 0; i < 5 ; i++)
   {
-    if (sscanf(str1, "\r\n+CPIN: %[^\r\n]", str2) == 1)
+    if (gsm_at_sendCommand("AT+CPIN?\r\n", 1000, str1, sizeof(str1), 2, "\r\n+CPIN:", "\r\nERROR\r\n") == 1)
     {
-      if (strcmp(str2, "READY") == 0)
+      if (sscanf(str1, "\r\n+CPIN: %[^\r\n]", str2) == 1)
       {
-        gsm_callback_simcardReady();
-      }
-      if (strcmp(str2, "SIM PIN") == 0)
-      {
-        gsm_callback_simcardPinRequest();
-      }
-      if (strcmp(str2, "SIM PUK") == 0)
-      {
-        gsm_callback_simcardPukRequest();
-      }
-    }      
-  }
+        if (strcmp(str2, "READY") == 0)
+        {
+          gsm_callback_simcardReady();
+          break;
+        }
+        if (strcmp(str2, "SIM PIN") == 0)
+        {
+          gsm_callback_simcardPinRequest();
+          break;
+        }
+        if (strcmp(str2, "SIM PUK") == 0)
+        {
+          gsm_callback_simcardPukRequest();
+          break;
+        }
+      }      
+    }
+    else
+    {
+      osDelay(2000);
+    }
+  }    
   gsm_msg_textMode(true);  
   gsm_msg_selectStorage(Gsm_Msg_Store_MODULE);
   gsm_msg_selectCharacterSet(Gsm_Msg_ChSet_GSM);
