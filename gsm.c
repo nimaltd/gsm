@@ -115,7 +115,7 @@ void gsm_at_sendString(const char *string)
 //#############################################################################################
 uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, uint16_t sizeOfAnswer, uint8_t items, ...)
 {
-  if (osMutexWait(gsmMutexID, 1000) != osOK)
+  if (osMutexWait(gsmMutexID, 10000) != osOK)
     return 0;
   va_list tag;
   va_start (tag, items);
@@ -294,6 +294,45 @@ uint8_t gsm_getSignalQuality_0_to_100(void)
   return gsm.signal;
 }
 //#############################################################################################
+bool gsm_ussd(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t waitSecond)
+{
+  if (command == NULL)
+  {
+    if (gsm_at_sendCommand("AT+CUSD=2\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
+    return true;    
+  }
+  else if (answer == NULL)
+  {
+    char str[16 + strlen(command)];
+    sprintf(str, "AT+CUSD=0,\"%s\"\r\n", command);    
+    if (gsm_at_sendCommand(str, waitSecond * 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
+    return true;
+  }
+  else
+  {
+    char str[16 + strlen(command)];
+    char str2[sizeOfAnswer + 32]; 
+    sprintf(str, "AT+CUSD=1,\"%s\"\r\n", command);    
+    if (gsm_at_sendCommand(str, waitSecond * 1000 , str2, sizeof(str2), 2, "\r\n+CUSD:", "\r\nERROR\r\n") != 1)
+    {
+      gsm_at_sendCommand("AT+CUSD=2\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
+      return false;
+    }
+    char *start = strstr(str2, "\"");
+    char *end = strstr(str2, "\", ");
+    if (start != NULL && end != NULL)
+    {
+      start++;
+      strncpy(answer, start, end - start);
+      return true;      
+    }
+    else
+      return false;    
+  }
+}
+//#############################################################################################
 bool gsm_waitForReady(uint8_t waitSecond)
 {
   uint32_t startTime = HAL_GetTick();
@@ -342,10 +381,28 @@ void gsm_init_config(void)
     {
       osDelay(2000);
     }
-  }    
-  gsm_msg_textMode(true);  
-  gsm_msg_selectStorage(Gsm_Msg_Store_MODULE);
-  gsm_msg_selectCharacterSet(Gsm_Msg_ChSet_GSM);
+  } 
+  for (uint8_t i = 0; i < 5 ; i++)
+  {  
+    if (gsm_msg_textMode(true))
+      break;
+    else
+      osDelay(2000);    
+  }
+  for (uint8_t i = 0; i < 5 ; i++)
+  {  
+    if (gsm_msg_selectStorage(Gsm_Msg_Store_MODULE))
+      break;
+    else
+      osDelay(2000);    
+  }
+  for (uint8_t i = 0; i < 5 ; i++)
+  {  
+    if (gsm_msg_selectCharacterSet(Gsm_Msg_ChSet_IRA))
+      break;
+    else
+      osDelay(2000);    
+  }
 }  
 //#############################################################################################
 //#############################################################################################
@@ -353,6 +410,8 @@ void gsm_init_config(void)
 void gsm_task(void const * argument)
 {
   static uint32_t gsm10sTimer = 0;
+  static uint32_t gsm60sTimer = 0;
+  static uint8_t  gsmError = 0;
   gsm.inited = 1;
   while (HAL_GetTick() < 2000)
     osDelay(100);
@@ -378,7 +437,33 @@ void gsm_task(void const * argument)
       if (HAL_GetTick() - gsm10sTimer >= 10000)
       {
         gsm10sTimer = HAL_GetTick();
-        gsm_getSignalQuality_0_to_100();
+        if (gsm_getSignalQuality_0_to_100() < 10)
+        {
+          gsmError++;
+          if (gsmError == 6)
+          {
+            gsm_power(false);
+            osDelay(2000);
+            gsm_power(true);
+          }
+        }
+        else
+          gsmError = 0;
+      }
+      if (HAL_GetTick() - gsm60sTimer >= 60000)
+      {
+        gsm60sTimer = HAL_GetTick();
+        if (gsm_msg_getStorageUsed() > 0)
+        {
+          for (uint16_t i = 0; i < 150 ; i++)
+          {
+            if (gsm_msg_read(i))
+            {
+              gsm_callback_newMsg(gsm.msg.number, gsm.msg.time, (char*)gsm.msg.buff);
+              gsm_msg_delete(i);
+            }
+          }
+        }        
       }
       if (gsm.msg.newMsg != -1)
       {

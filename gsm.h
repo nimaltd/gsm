@@ -7,11 +7,14 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.0.1
+  Version:    4.0.2
   
   
   Reversion History:
 
+  (4.0.2)
+  Add ussd.
+  
   (4.0.1)
   Solve power on problem.
   
@@ -133,6 +136,7 @@ bool            gsm_getIMEI(char* string, uint8_t sizeOfString);
 bool            gsm_getModel(char* string, uint8_t sizeOfString);
 bool            gsm_getServiceProviderName(char* string, uint8_t sizeOfString);
 uint8_t         gsm_getSignalQuality_0_to_100(void);
+bool            gsm_ussd(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t waitSecond);
 //###################################################################   message functions
 bool            gsm_msg_textMode(bool on_off);
 bool            gsm_msg_isTextMode(void);
