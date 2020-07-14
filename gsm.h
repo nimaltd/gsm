@@ -13,7 +13,7 @@
   Reversion History:
 
   (4.0.3)
-  Change always search to flash memory, fix somethings
+  Change always search to flash memory, Add dtmf detect, fix somethings
   
   (4.0.2)
   Add ussd.
@@ -107,6 +107,8 @@ typedef struct
   uint8_t         ringing;
   uint8_t         busy;
   uint8_t         callbackEndCall;
+  char            dtmfKey;
+  uint8_t         dtmfIndex;
   char            number[16];  
     
 }Gsm_Call_t;
@@ -170,6 +172,7 @@ void            gsm_callback_newMsg(char *number, Gsm_Time_t time, char *msg);
 void            gsm_callback_newCall(char *number);
 void            gsm_callback_endCall(void);
 void            gsm_callback_nowAnswer(void);
+void            gsm_callback_dtmf(char key, uint8_t cnt);
 //###################################################################
 
 

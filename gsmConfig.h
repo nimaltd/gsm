@@ -8,8 +8,7 @@
 #define   _GSM_POWERKEY_PIN         GSM_KEY_Pin
 
 //  do not change
-#define   _GSM_AT_MAX_ANSWER_ITEMS  5           
-#define   _GSM_AT_MAX_ALWAYS_ITEMS  5           
+#define   _GSM_AT_MAX_ANSWER_ITEMS  5                  
 #define   _GSM_TASKSIZE             512  
 #define   _GSM_RXSIZE               512  
 #define   _GSM_RXTIMEOUT            10  

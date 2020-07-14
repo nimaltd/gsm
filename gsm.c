@@ -5,12 +5,13 @@ osThreadId            gsmTaskHandle;
 osMutexId             gsmMutexID;  
 Gsm_t                 gsm;
 
-const char            *GSM_ALWAYS_SEARCH[] =
+const char            *_GSM_ALWAYS_SEARCH[] =
 {
   "\r\n+CLIP:",               //  0
   "POWER DOWN\r\n",           //  1
   "\r\n+CMTI:",               //  2  
   "\r\nNO CARRIER\r\n",       //  3
+  "\r\n+DTMF:"                //  4
 };
 //#############################################################################################
 void                  gsm_init_config(void);
@@ -59,9 +60,9 @@ void gsm_at_checkRxBuffer(void)
     //  --- search answer atcommand
     
     //  +++ search always 
-    for (uint8_t i = 0; i < sizeof(GSM_ALWAYS_SEARCH) / 4; i++)
+    for (uint8_t i = 0; i < sizeof(_GSM_ALWAYS_SEARCH) / 4; i++)
     {
-      char *str = strstr((char*)gsm.at.buff, GSM_ALWAYS_SEARCH[i]);
+      char *str = strstr((char*)gsm.at.buff, _GSM_ALWAYS_SEARCH[i]);
       if(str != NULL)
       {
         switch (i)
@@ -82,9 +83,17 @@ void gsm_at_checkRxBuffer(void)
               break;
             }              
           break;
-          case 3:   //  found   \r\nNO CARRIER\r\n
+          case 3:   //  found   "\r\nNO CARRIER\r\n"
             gsm.call.callbackEndCall = 1;
-          break;             
+          break;  
+          case 4:   //  found   "\r\n+DTMF:"
+            if (sscanf(str,"\r\n+DTMF: %c", &gsm.call.dtmfKey) == 1)
+            {
+              gsm_callback_dtmf(gsm.call.dtmfKey, gsm.call.dtmfIndex);
+              gsm.call.dtmfIndex++;
+            }
+          break;
+          
         }
       }
     //  --- search always 
@@ -350,6 +359,7 @@ void gsm_init_config(void)
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_at_sendCommand("AT+DDET=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   for (uint8_t i = 0; i < 5 ; i++)
   {
     if (gsm_at_sendCommand("AT+CPIN?\r\n", 1000, str1, sizeof(str1), 2, "\r\n+CPIN:", "\r\nERROR\r\n") == 1)
@@ -432,6 +442,7 @@ void gsm_task(void const * argument)
       gsm_at_checkRxBuffer();
       if (gsm.call.callbackEndCall == 1)  // \r\nNO CARRIER\r\n detect
       {
+        gsm.call.dtmfIndex = 0;
         gsm.call.callbackEndCall = 0;
         gsm_callback_endCall();
         gsm.call.busy = 0;
