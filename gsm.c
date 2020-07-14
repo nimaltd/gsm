@@ -5,6 +5,13 @@ osThreadId            gsmTaskHandle;
 osMutexId             gsmMutexID;  
 Gsm_t                 gsm;
 
+const char            *GSM_ALWAYS_SEARCH[] =
+{
+  "\r\n+CLIP:",               //  0
+  "POWER DOWN\r\n",           //  1
+  "\r\n+CMTI:",               //  2  
+  "\r\nNO CARRIER\r\n",       //  3
+};
 //#############################################################################################
 void                  gsm_init_config(void);
 //#############################################################################################
@@ -52,49 +59,36 @@ void gsm_at_checkRxBuffer(void)
     //  --- search answer atcommand
     
     //  +++ search always 
-    for (uint8_t i = 0; i < _GSM_AT_MAX_ALWAYS_ITEMS; i++)
+    for (uint8_t i = 0; i < sizeof(GSM_ALWAYS_SEARCH) / 4; i++)
     {
-      if (gsm.at.alwaysSearch[i] != NULL)
+      char *str = strstr((char*)gsm.at.buff, GSM_ALWAYS_SEARCH[i]);
+      if(str != NULL)
       {
-        char *str = strstr((char*)gsm.at.buff, gsm.at.alwaysSearch[i]);
-        if(str != NULL)
+        switch (i)
         {
-          if (strstr(str, "POWER DOWN\r\n") != NULL)  
-          {
+          case 0:   //  found   "\r\n+CLIP:"      
+            if (sscanf(str,"\r\n+CLIP: \"%[^\"]\"", gsm.call.number) == 1)
+              gsm.call.ringing = 1;
+          break;
+          case 1:   //  found   "POWER DOWN\r\n"
             gsm.power = 0;    
-            break;
-          }
-          if (strstr(str, "\r\n+CMTI:") != NULL)
-          {
-            char *s = strchr(str, ',');
-            if (s != NULL)
+          break;
+          case 2:   //  found   "\r\n+CMTI:"
+            str = strchr(str, ',');
+            if (str != NULL)
             {
-              s++;
-              gsm.msg.newMsg = atoi(s);
+              str++;
+              gsm.msg.newMsg = atoi(str);
               break;
-            }
-          }          
-        }
-        if (strstr(str, "\r\n+CLIP:") != NULL)
-        {
-          if (sscanf(str,"\r\n+CLIP: \"%[^\"]\"", gsm.call.number) == 1)
-          {
-            gsm.call.ringing = 1;
-          }
+            }              
           break;
-        }
-        if (strcmp(str, "\r\nNO CARRIER\r\n") == 0)
-        {
-          gsm_callback_endCall();
-          gsm.call.busy = 0;
-          break;
+          case 3:   //  found   \r\nNO CARRIER\r\n
+            gsm.call.callbackEndCall = 1;
+          break;             
         }
       }
-      else
-        break;
-    }
     //  --- search always 
-    
+    }
     memset(gsm.at.buff,0, _GSM_RXSIZE);
     gsm.at.index = 0;
   }
@@ -161,19 +155,6 @@ uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, u
   return gsm.at.answerFound + 1;   
 }
 //#############################################################################################
-void gsm_at_addAlwaysSearchString(const char *string)
-{
-  for (uint8_t i = 0; i < _GSM_AT_MAX_ALWAYS_ITEMS ; i++)
-  {
-    if (gsm.at.alwaysSearch[i] == NULL)
-    {
-      gsm.at.alwaysSearch[i] = pvPortMalloc(strlen(string));
-      strcpy(gsm.at.alwaysSearch[i], string);
-      break;
-    }      
-  }    
-}
-//#############################################################################################
 //#############################################################################################
 //#############################################################################################
 bool gsm_power(bool on_off)
@@ -226,6 +207,20 @@ bool gsm_power(bool on_off)
       return false;
     }      
   }  
+}
+//#############################################################################################
+bool gsm_setDefault(void)
+{
+  if (gsm_at_sendCommand("AT&F0\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return true;
+  return false;
+}
+//#############################################################################################
+bool gsm_saveProfile(void)
+{
+  if (gsm_at_sendCommand("AT&W\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return true;
+  return false;
 }
 //#############################################################################################
 bool gsm_enterPinPuk(const char* string)
@@ -349,6 +344,7 @@ void gsm_init_config(void)
 {
   char str1[32];
   char str2[16];
+  gsm_setDefault();
   gsm_at_sendCommand("ATE1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+COLP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
@@ -434,13 +430,19 @@ void gsm_task(void const * argument)
     if (gsm.power == 1)
     {
       gsm_at_checkRxBuffer();
+      if (gsm.call.callbackEndCall == 1)  // \r\nNO CARRIER\r\n detect
+      {
+        gsm.call.callbackEndCall = 0;
+        gsm_callback_endCall();
+        gsm.call.busy = 0;
+      }
       if (HAL_GetTick() - gsm10sTimer >= 10000)
       {
         gsm10sTimer = HAL_GetTick();
-        if (gsm_getSignalQuality_0_to_100() < 10)
+        if (gsm_getSignalQuality_0_to_100() < 10) //  update signal value every 10 seconds
         {
           gsmError++;
-          if (gsmError == 6)
+          if (gsmError == 6)  //  restart after 60 seconds while low signal
           {
             gsm_power(false);
             osDelay(2000);
@@ -450,10 +452,10 @@ void gsm_task(void const * argument)
         else
           gsmError = 0;
       }
-      if (HAL_GetTick() - gsm60sTimer >= 60000)
+      if (HAL_GetTick() - gsm60sTimer >= 60000) 
       {
         gsm60sTimer = HAL_GetTick();
-        if (gsm_msg_getStorageUsed() > 0)
+        if (gsm_msg_getStorageUsed() > 0) //  check sms memory every 60 seconds
         {
           for (uint16_t i = 0; i < 150 ; i++)
           {
@@ -480,6 +482,10 @@ void gsm_task(void const * argument)
         gsm.call.ringing = 0;
       }      
     }
+    else
+    {
+      gsm_power(true);  //  turn on again, after power down
+    }
     osDelay(_GSM_RXTIMEOUT);
   }
 }
@@ -489,10 +495,6 @@ bool gsm_init(osPriority osPriority_)
   if (gsm.inited == 1)
     return true;
   HAL_GPIO_WritePin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN, GPIO_PIN_SET);
-  gsm_at_addAlwaysSearchString("\r\n+CLIP:");
-  gsm_at_addAlwaysSearchString("POWER DOWN\r\n");
-  gsm_at_addAlwaysSearchString("\r\n+CMTI:");
-  gsm_at_addAlwaysSearchString("\r\nNO CARRIER\r\n");
   osMutexDef(gsmMutex); 
   gsmMutexID = osMutexCreate(osMutex (gsmMutex));
   osThreadStaticDef(gsmTask, gsm_task, osPriority_, 0, _GSM_TASKSIZE, NULL, NULL);

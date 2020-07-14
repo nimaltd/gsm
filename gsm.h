@@ -7,11 +7,14 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.0.2
+  Version:    4.0.3
   
   
   Reversion History:
 
+  (4.0.3)
+  Change always search to flash memory, fix somethings
+  
   (4.0.2)
   Add ussd.
   
@@ -79,7 +82,6 @@ typedef struct
   uint8_t       rxCheckBusy;
   int8_t        answerFound;
   char*         answerSearch[_GSM_AT_MAX_ANSWER_ITEMS];          
-  char*         alwaysSearch[_GSM_AT_MAX_ALWAYS_ITEMS];
   char*         answerString;
   uint16_t      answerSize;  
   
@@ -104,6 +106,7 @@ typedef struct
 {
   uint8_t         ringing;
   uint8_t         busy;
+  uint8_t         callbackEndCall;
   char            number[16];  
     
 }Gsm_Call_t;
@@ -130,6 +133,8 @@ uint8_t         gsm_at_sendCommand(const char *command, uint32_t waitMs, char *a
 //###################################################################   general functions
 bool            gsm_init(osPriority osPriority_);
 bool            gsm_power(bool on_off);
+bool            gsm_setDefault(void);
+bool            gsm_saveProfile(void);
 bool            gsm_waitForReady(uint8_t waitSecond);
 bool            gsm_enterPinPuk(const char* string);
 bool            gsm_getIMEI(char* string, uint8_t sizeOfString);
