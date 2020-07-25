@@ -1,6 +1,5 @@
 
 #include "gsm.h"
-#include "functions.h"
 
 //#################################################################################
 __weak void gsm_callback_simcardReady(void)
