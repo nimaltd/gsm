@@ -255,6 +255,20 @@ bool gsm_getIMEI(char* string, uint8_t sizeOfString)
   return true;  
 }
 //#############################################################################################
+bool gsm_getVersion(char* string, uint8_t sizeOfString)
+{
+  if (string == NULL)
+    return false;
+  char str1[16 + sizeOfString];
+  char str2[sizeOfString + 1];
+  if (gsm_at_sendCommand("AT+CGMR\r\n", 1000 , str1, sizeof(str1), 2, "AT+GMM", "\r\nERROR\r\n") != 1)
+    return false;
+  if (sscanf(str1,"\r\nAT+CGMR\r\n %[^\r\n]", str2) != 1)
+    return false;
+  strncpy(string, str2, sizeOfString);
+  return true; 
+}
+//#############################################################################################
 bool gsm_getModel(char* string, uint8_t sizeOfString)
 {
   if (string == NULL)
@@ -349,6 +363,34 @@ bool gsm_waitForReady(uint8_t waitSecond)
   return false;  
 }
 //#############################################################################################
+bool gsm_tonePlay(Gsm_Tone_t Gsm_Tone_, uint32_t durationMiliSecond, uint8_t level_0_100)
+{
+  char str[32];
+  sprintf(str, "AT+SNDLEVEL=0,%d\r\n", level_0_100);
+  if (gsm_at_sendCommand(str, 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  sprintf(str, "AT+STTONE=1,%d,%d\r\n", Gsm_Tone_, durationMiliSecond);
+  if (gsm_at_sendCommand(str, 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  return true;  
+}
+//#############################################################################################
+bool gsm_toneStop(void)
+{
+  if (gsm_at_sendCommand("AT+STTONE=0\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return true;
+  return false;
+}
+//#############################################################################################
+bool gsm_dtmf(char *string, uint32_t durationMiliSecond)
+{
+  char str[32];
+  sprintf(str, "AT+VTS=\"%s\",%d\r\n", string, durationMiliSecond / 100);
+  if (gsm_at_sendCommand(str, 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  return true; 
+}
+//#############################################################################################
 void gsm_init_config(void)
 {
   char str1[32];
@@ -359,7 +401,6 @@ void gsm_init_config(void)
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
-  gsm_at_sendCommand("AT+DDET=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   for (uint8_t i = 0; i < 5 ; i++)
   {
     if (gsm_at_sendCommand("AT+CPIN?\r\n", 1000, str1, sizeof(str1), 2, "\r\n+CPIN:", "\r\nERROR\r\n") == 1)
@@ -409,6 +450,7 @@ void gsm_init_config(void)
     else
       osDelay(2000);    
   }
+  gsm_at_sendCommand("AT+DDET=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
 }  
 //#############################################################################################
 //#############################################################################################

@@ -7,11 +7,14 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.0.3
+  Version:    4.0.4
   
   
   Reversion History:
 
+  (4.0.4)
+  Change AT+DDET place.
+  
   (4.0.3)
   Change always search to flash memory, Add dtmf detect, fix somethings
   
@@ -48,6 +51,24 @@ typedef struct
   uint8_t       second;
   
 }Gsm_Time_t;
+
+typedef enum
+{
+  Gsm_Tone_DialTone = 1,
+  Gsm_Tone_CalledSubscriberBusy = 2,
+  Gsm_Tone_Congestion = 3, 
+  Gsm_Tone_RadioPathAcknowledge = 4,
+  Gsm_Tone_RadioPathNotAvailableOrCallDropped = 5,
+  Gsm_Tone_ErrorOrSpecialinformation = 6,
+  Gsm_Tone_CallWaitingTone = 7,
+  Gsm_Tone_RingingTone = 8,
+  Gsm_Tone_GeneralBeep = 16,
+  Gsm_Tone_PositiveAcknowledgementTone = 17,
+  Gsm_Tone_NegativeAcknowledgementOrErrorTone = 18, 
+  Gsm_Tone_IndianDialTone = 19,
+  Gsm_Tone_AmericanDialTone = 20
+
+}Gsm_Tone_t;
 
 typedef enum
 {
@@ -140,10 +161,14 @@ bool            gsm_saveProfile(void);
 bool            gsm_waitForReady(uint8_t waitSecond);
 bool            gsm_enterPinPuk(const char* string);
 bool            gsm_getIMEI(char* string, uint8_t sizeOfString);
+bool            gsm_getVersion(char* string, uint8_t sizeOfString);
 bool            gsm_getModel(char* string, uint8_t sizeOfString);
 bool            gsm_getServiceProviderName(char* string, uint8_t sizeOfString);
 uint8_t         gsm_getSignalQuality_0_to_100(void);
 bool            gsm_ussd(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t waitSecond);
+bool            gsm_tonePlay(Gsm_Tone_t Gsm_Tone_, uint32_t durationMiliSecond, uint8_t level_0_100); 
+bool            gsm_toneStop(void);
+bool            gsm_dtmf(char *string, uint32_t durationMiliSecond);
 //###################################################################   message functions
 bool            gsm_msg_textMode(bool on_off);
 bool            gsm_msg_isTextMode(void);
