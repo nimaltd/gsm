@@ -4,6 +4,8 @@
 * https://www.instagram.com/github.nimaltd/   
 * https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw   
 --------------------------------------------------------------------------------
+Not recommended for small devices
+--------------------------------------------------------------------------------
 * [x] CMSIS V1 Supported.
 * [ ] CMSIS V2 Supported.
 --------------------------------------------------------------------------------
