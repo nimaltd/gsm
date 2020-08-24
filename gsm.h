@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.0.4
+  Version:    4.1.0
   
   
   Reversion History:
+  
+  (4.1.0)
+  Add GPRS. Change somethings. Improve performance.
 
   (4.0.4)
   Change AT+DDET place.
@@ -100,7 +103,6 @@ typedef struct
   uint32_t      rxTime;  
   uint16_t      index;
   uint8_t       buff[_GSM_RXSIZE];
-  uint8_t       rxCheckBusy;
   int8_t        answerFound;
   char*         answerSearch[_GSM_AT_MAX_ANSWER_ITEMS];          
   char*         answerString;
@@ -128,22 +130,42 @@ typedef struct
   uint8_t         ringing;
   uint8_t         busy;
   uint8_t         callbackEndCall;
-  char            dtmfKey;
-  uint8_t         dtmfIndex;
   char            number[16];  
+  #if (_GSM_DTMF_DETECT_ENABLE == 1)
+  uint8_t         dtmf;
+  #endif
     
 }Gsm_Call_t;
 
 typedef struct
 {
+  bool            open;
+  char            ip[16];
+  uint32_t        dataLen;
+  uint32_t        dataCurrent;
+  int16_t         code;
+  uint8_t         buff[_GSM_RXSIZE];
+  
+}Gsm_Gprs_t;
+
+typedef struct
+{
   uint8_t       inited;
   uint8_t       power;
-  uint8_t       ready;
+  uint8_t       started;
+  uint8_t       registred;
   uint8_t       signal; 
   
   Gsm_At_t      at;
+  #if (_GSM_MSG_ENABLE == 1)
   Gsm_Msg_t     msg;
+  #endif
+  #if (_GSM_CALL_ENABLE == 1)
   Gsm_Call_t    call;
+  #endif
+  #if (_GSM_GPRS_ENABLE == 1)
+  Gsm_Gprs_t    gprs;
+  #endif
   
 }Gsm_t;
 
@@ -152,13 +174,15 @@ extern          Gsm_t       gsm;
 //###################################################################   at commands
 void            gsm_at_rxCallback(void);
 void            gsm_at_sendString(const char *string);
+void            gsm_at_sendData(const uint8_t *data, uint16_t len);
 uint8_t         gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, uint16_t sizeOfAnswer, uint8_t items, ...);
 //###################################################################   general functions
 bool            gsm_init(osPriority osPriority_);
 bool            gsm_power(bool on_off);
 bool            gsm_setDefault(void);
 bool            gsm_saveProfile(void);
-bool            gsm_waitForReady(uint8_t waitSecond);
+bool            gsm_waitForStarted(uint8_t waitSecond);
+bool            gsm_waitForRegister(uint8_t waitSecond);
 bool            gsm_enterPinPuk(const char* string);
 bool            gsm_getIMEI(char* string, uint8_t sizeOfString);
 bool            gsm_getVersion(char* string, uint8_t sizeOfString);
@@ -186,18 +210,28 @@ bool            gsm_call_answer(void);
 bool            gsm_call_end(void);
 bool            gsm_call_dial(const char* number, uint8_t waitSecond);
 //###################################################################   gprs functions
-
+bool            gsm_gprs_setApName(char *apName);
+bool            gsm_gprs_open(void);
+bool            gsm_gprs_close(void);
+int16_t         gsm_gprs_httpGet(char *url);
+int16_t         gsm_gprs_httpPost(char *url);
+uint16_t        gsm_gprs_httpRead(uint16_t len);
+bool            gsm_gprs_httpTerminate(void);
+bool            gsm_gprs_ftpParameters(char *ftpAddress, char *ftpUserName, char *ftpPassword, uint16_t port);
+bool            gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len);
+bool            gsm_gprs_ftpUploadEnd(void);
 //###################################################################   bluetooth functions
 
 //###################################################################   library callback functions
 void            gsm_callback_simcardReady(void);
 void            gsm_callback_simcardPinRequest(void);
 void            gsm_callback_simcardPukRequest(void);
+void            gsm_callback_simcardNotInserted(void);
 void            gsm_callback_newMsg(char *number, Gsm_Time_t time, char *msg);
 void            gsm_callback_newCall(char *number);
 void            gsm_callback_endCall(void);
 void            gsm_callback_nowAnswer(void);
-void            gsm_callback_dtmf(char key, uint8_t cnt);
+void            gsm_callback_dtmf(char key);
 //###################################################################
 
 

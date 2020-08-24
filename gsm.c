@@ -2,7 +2,11 @@
 #include "gsm.h"
 //#############################################################################################
 osThreadId            gsmTaskHandle;
+osThreadId            gsmBufferTaskHandle;
 osMutexId             gsmMutexID;  
+#if (_GSM_DTMF_DETECT_ENABLE == 1)
+osMessageQId          gsmDtmfQueueHandle;
+#endif
 Gsm_t                 gsm;
 
 const char            *_GSM_ALWAYS_SEARCH[] =
@@ -11,7 +15,9 @@ const char            *_GSM_ALWAYS_SEARCH[] =
   "POWER DOWN\r\n",           //  1
   "\r\n+CMTI:",               //  2  
   "\r\nNO CARRIER\r\n",       //  3
-  "\r\n+DTMF:"                //  4
+  "\r\n+DTMF:",               //  4
+  "\r\n+CREG:",               //  5
+  "\r\n+SAPBR 1: DEACT\r\n",  //  6
 };
 //#############################################################################################
 void                  gsm_init_config(void);
@@ -32,9 +38,6 @@ void gsm_at_rxCallback(void)
 //#############################################################################################
 void gsm_at_checkRxBuffer(void)
 {
-  if (gsm.at.rxCheckBusy == 1)
-    return;
-  gsm.at.rxCheckBusy = 1;
   if ((gsm.at.index > 0) && (HAL_GetTick() - gsm.at.rxTime >= _GSM_RXTIMEOUT))
   {
     #if _GSM_DEBUG == 1
@@ -68,13 +71,17 @@ void gsm_at_checkRxBuffer(void)
         switch (i)
         {
           case 0:   //  found   "\r\n+CLIP:"      
+            #if (_GSM_CALL_ENABLE == 1)
             if (sscanf(str,"\r\n+CLIP: \"%[^\"]\"", gsm.call.number) == 1)
               gsm.call.ringing = 1;
+            #endif
           break;
           case 1:   //  found   "POWER DOWN\r\n"
-            gsm.power = 0;    
+            gsm.power = 0; 
+            gsm.started = 0;          
           break;
           case 2:   //  found   "\r\n+CMTI:"
+            #if (_GSM_MSG_ENABLE == 1)
             str = strchr(str, ',');
             if (str != NULL)
             {
@@ -82,18 +89,30 @@ void gsm_at_checkRxBuffer(void)
               gsm.msg.newMsg = atoi(str);
               break;
             }              
+            #endif
           break;
           case 3:   //  found   "\r\nNO CARRIER\r\n"
+            #if (_GSM_CALL_ENABLE == 1)
             gsm.call.callbackEndCall = 1;
+            #endif
           break;  
           case 4:   //  found   "\r\n+DTMF:"
-            if (sscanf(str,"\r\n+DTMF: %c", &gsm.call.dtmfKey) == 1)
-            {
-              gsm_callback_dtmf(gsm.call.dtmfKey, gsm.call.dtmfIndex);
-              gsm.call.dtmfIndex++;
-            }
+            #if ((_GSM_DTMF_DETECT_ENABLE == 1) && (_GSM_CALL_ENABLE == 1))
+            if (sscanf(str, "\r\n+DTMF: %c\r\n", &gsm.call.dtmf) == 1) 
+              osMessagePut(gsmDtmfQueueHandle, gsm.call.dtmf, 10);
+            #endif
           break;
-          
+          case 5:   //  found   "\r\n+CREG:"
+            if (strstr(str, "\r\n+CREG: 1\r\n") != NULL)
+              gsm.registred = 1;    
+            else
+              gsm.registred = 0;    
+          break;
+          case 6:   //  found   "\r\n+SAPBR 1: DEACT\r\n"
+            #if (_GSM_GPRS_ENABLE == 1)
+            gsm.gprs.open = false;
+            #endif
+          break;          
         }
       }
     //  --- search always 
@@ -101,7 +120,6 @@ void gsm_at_checkRxBuffer(void)
     memset(gsm.at.buff,0, _GSM_RXSIZE);
     gsm.at.index = 0;
   }
-  gsm.at.rxCheckBusy = 0;
 }
 //#############################################################################################
 void gsm_at_sendString(const char *string)
@@ -116,9 +134,21 @@ void gsm_at_sendString(const char *string)
     osDelay(1);
 }
 //#############################################################################################
+void gsm_at_sendData(const uint8_t *data, uint16_t len)
+{
+  for(uint16_t i = 0; i<len; i++)
+  {
+    while (!LL_USART_IsActiveFlag_TXE(_GSM_USART))
+      osDelay(1);
+    LL_USART_TransmitData8(_GSM_USART, data[i]);   
+  }
+  while (!LL_USART_IsActiveFlag_TC(_GSM_USART))
+    osDelay(1);
+}
+//#############################################################################################
 uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, uint16_t sizeOfAnswer, uint8_t items, ...)
 {
-  if (osMutexWait(gsmMutexID, 10000) != osOK)
+  if (osMutexWait(gsmMutexID, portMAX_DELAY) != osOK)
     return 0;
   va_list tag;
   va_start (tag, items);
@@ -143,18 +173,15 @@ uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, u
   {
     if (gsm.at.answerFound != -1)
       break;
-    gsm_at_checkRxBuffer();
-    osDelay(_GSM_RXTIMEOUT);
+    osDelay(10);
   }
   for (uint8_t i = 0; i < items; i++)
   {
-    //memset(gsm.at.answerSearch[i], 0, strlen(gsm.at.answerSearch[i]));
     vPortFree(gsm.at.answerSearch[i]);
     gsm.at.answerSearch[i] = NULL;
   }
   if ((answer != NULL) && (sizeOfAnswer > 0))
   {
-    //memset(gsm.at.answerString, 0, strlen(gsm.at.answerString));
     if (gsm.at.answerFound >= 0)
       strncpy(answer, gsm.at.answerString, sizeOfAnswer);
     vPortFree(gsm.at.answerString);  
@@ -168,12 +195,13 @@ uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, u
 //#############################################################################################
 bool gsm_power(bool on_off)
 {
-  if (on_off)
+  if (on_off) //  power on
   {
     if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") == 1)
     {
       gsm.power = 1;
       gsm_init_config();
+      gsm.started = 1;
       return true;
     }
     HAL_GPIO_WritePin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN, GPIO_PIN_RESET);
@@ -185,19 +213,22 @@ bool gsm_power(bool on_off)
       if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 1)
       {
         gsm.power = 1;
+        osDelay(4000);
         gsm_init_config();
+        gsm.started = 1;
         return true;
       }        
     }
     gsm.power = 0;
+    gsm.started = 0;
     return false;
   }
-  else
+  else  //  power off
   {
     if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 0)
     {
-      gsm.ready = 0;
       gsm.power = 0;
+      gsm.started = 0;
       return true;
     }
     HAL_GPIO_WritePin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN, GPIO_PIN_RESET);
@@ -206,8 +237,8 @@ bool gsm_power(bool on_off)
     osDelay(2000);    
     if (gsm_at_sendCommand("AT\r\n", 500, NULL, 0, 1, "\r\nOK\r\n") == 0)
     {
-      gsm.ready = 0;
       gsm.power = 0;
+      gsm.started = 0;
       return true;
     }
     else
@@ -351,14 +382,33 @@ bool gsm_ussd(char *command, char *answer, uint16_t sizeOfAnswer, uint8_t waitSe
   }
 }
 //#############################################################################################
-bool gsm_waitForReady(uint8_t waitSecond)
+bool gsm_waitForStarted(uint8_t waitSecond)
 {
   uint32_t startTime = HAL_GetTick();
   while (HAL_GetTick() - startTime < (waitSecond * 1000))
   {
     osDelay(100);
-    if (gsm.ready == 1)
+    if (gsm.started == 1)
       return true;
+  } 
+  return false;  
+}
+//#############################################################################################
+bool gsm_waitForRegister(uint8_t waitSecond)
+{
+  uint32_t startTime = HAL_GetTick();
+  uint8_t idx = 0;
+  while (HAL_GetTick() - startTime < (waitSecond * 1000))
+  {
+    osDelay(100);
+    if (gsm.registred == 1)
+      return true;
+    idx++;
+    if (idx % 10 == 0)
+    {
+      if (gsm_at_sendCommand("AT+CREG?\r\n", 1000, NULL, 0, 1, "\r\n+CREG: 1,1\r\n") == 1)
+        gsm.registred = 1;
+    }
   } 
   return false;  
 }
@@ -401,6 +451,7 @@ void gsm_init_config(void)
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  osDelay(2000);
   for (uint8_t i = 0; i < 5 ; i++)
   {
     if (gsm_at_sendCommand("AT+CPIN?\r\n", 1000, str1, sizeof(str1), 2, "\r\n+CPIN:", "\r\nERROR\r\n") == 1)
@@ -426,31 +477,18 @@ void gsm_init_config(void)
     }
     else
     {
-      osDelay(2000);
+      gsm_callback_simcardNotInserted();
     }
+    osDelay(2000);
   } 
-  for (uint8_t i = 0; i < 5 ; i++)
-  {  
-    if (gsm_msg_textMode(true))
-      break;
-    else
-      osDelay(2000);    
-  }
-  for (uint8_t i = 0; i < 5 ; i++)
-  {  
-    if (gsm_msg_selectStorage(Gsm_Msg_Store_MODULE))
-      break;
-    else
-      osDelay(2000);    
-  }
-  for (uint8_t i = 0; i < 5 ; i++)
-  {  
-    if (gsm_msg_selectCharacterSet(Gsm_Msg_ChSet_IRA))
-      break;
-    else
-      osDelay(2000);    
-  }
+  #if (_GSM_MSG_ENABLE == 1)
+  gsm_msg_textMode(true);
+  gsm_msg_selectStorage(Gsm_Msg_Store_MODULE);
+  gsm_msg_selectCharacterSet(Gsm_Msg_ChSet_IRA);
+  #endif
+  #if (_GSM_DTMF_DETECT_ENABLE == 1)
   gsm_at_sendCommand("AT+DDET=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  #endif
 }  
 //#############################################################################################
 //#############################################################################################
@@ -460,11 +498,10 @@ void gsm_task(void const * argument)
   static uint32_t gsm10sTimer = 0;
   static uint32_t gsm60sTimer = 0;
   static uint8_t  gsmError = 0;
-  gsm.inited = 1;
   while (HAL_GetTick() < 2000)
     osDelay(100);
-  LL_USART_EnableIT_RXNE(_GSM_USART);  
   gsm_power(true);
+  #if (_GSM_MSG_ENABLE == 1)
   if (gsm.msg.storageUsed > 0)
   {
     for (uint16_t i = 0; i < 150 ; i++)
@@ -476,23 +513,30 @@ void gsm_task(void const * argument)
       }
     }
   }
-  gsm.ready = 1;
+  #endif
   while (1)
   {
     if (gsm.power == 1)
     {
-      gsm_at_checkRxBuffer();
+      #if (_GSM_DTMF_DETECT_ENABLE == 1)
+      osEvent event = osMessageGet(gsmDtmfQueueHandle, 0);
+      if (event.status == osEventMessage)
+      {
+        gsm_callback_dtmf((char)event.value.v);
+      }
+      #endif
+      #if (_GSM_CALL_ENABLE == 1)
       if (gsm.call.callbackEndCall == 1)  // \r\nNO CARRIER\r\n detect
       {
-        gsm.call.dtmfIndex = 0;
         gsm.call.callbackEndCall = 0;
         gsm_callback_endCall();
         gsm.call.busy = 0;
       }
-      if (HAL_GetTick() - gsm10sTimer >= 10000)
+      #endif
+      if (HAL_GetTick() - gsm10sTimer >= 10000) //  10 seconds timer
       {
         gsm10sTimer = HAL_GetTick();
-        if (gsm_getSignalQuality_0_to_100() < 10) //  update signal value every 10 seconds
+        if ((gsm_getSignalQuality_0_to_100() < 20) || (gsm.registred == 0)) //  update signal value every 10 seconds
         {
           gsmError++;
           if (gsmError == 6)  //  restart after 60 seconds while low signal
@@ -500,14 +544,16 @@ void gsm_task(void const * argument)
             gsm_power(false);
             osDelay(2000);
             gsm_power(true);
+            gsmError = 0;
           }
         }
         else
           gsmError = 0;
       }
-      if (HAL_GetTick() - gsm60sTimer >= 60000) 
+      if (HAL_GetTick() - gsm60sTimer >= 60000) //  60 seconds timer
       {
         gsm60sTimer = HAL_GetTick();
+        #if (_GSM_MSG_ENABLE == 1)
         if (gsm_msg_getStorageUsed() > 0) //  check sms memory every 60 seconds
         {
           for (uint16_t i = 0; i < 150 ; i++)
@@ -518,8 +564,10 @@ void gsm_task(void const * argument)
               gsm_msg_delete(i);
             }
           }
-        }        
+        }
+        #endif    
       }
+      #if (_GSM_MSG_ENABLE == 1)
       if (gsm.msg.newMsg != -1)
       {
         if (gsm_msg_read(gsm.msg.newMsg))
@@ -529,17 +577,30 @@ void gsm_task(void const * argument)
         }        
         gsm.msg.newMsg = -1;
       }
+      #endif
+      #if (_GSM_CALL_ENABLE == 1)
       if (gsm.call.ringing == 1)
       {
         gsm_callback_newCall(gsm.call.number);
         gsm.call.ringing = 0;
       }      
+      #endif
     }
     else
     {
       gsm_power(true);  //  turn on again, after power down
     }
-    osDelay(_GSM_RXTIMEOUT);
+    osDelay(10);
+  }  
+}
+//#############################################################################################
+void gsmBuffer_task(void const * argument)
+{
+  LL_USART_EnableIT_RXNE(_GSM_USART);  
+  while (1)
+  {
+    gsm_at_checkRxBuffer();   
+    osDelay(1);     
   }
 }
 //#############################################################################################
@@ -547,13 +608,26 @@ bool gsm_init(osPriority osPriority_)
 {
   if (gsm.inited == 1)
     return true;
+  gsm.inited = 1;
   HAL_GPIO_WritePin(_GSM_POWERKEY_GPIO, _GSM_POWERKEY_PIN, GPIO_PIN_SET);
-  osMutexDef(gsmMutex); 
-  gsmMutexID = osMutexCreate(osMutex (gsmMutex));
-  osThreadStaticDef(gsmTask, gsm_task, osPriority_, 0, _GSM_TASKSIZE, NULL, NULL);
-  gsmTaskHandle = osThreadCreate(osThread(gsmTask), NULL);
-  if ((gsmTaskHandle != NULL) && (gsmMutexID != NULL))
-    return true;
-  else
-    return false;
+  do
+  {
+    osMutexDef(gsmMutex); 
+    gsmMutexID = osMutexCreate(osMutex (gsmMutex));
+    osThreadStaticDef(gsmTask, gsm_task, osPriority_, 0, _GSM_TASKSIZE, NULL, NULL);
+    gsmTaskHandle = osThreadCreate(osThread(gsmTask), NULL);
+    osThreadStaticDef(gsmBufferTask, gsmBuffer_task, osPriority_, 0, _GSM_BUFFTASKSIZE, NULL, NULL);
+    gsmBufferTaskHandle = osThreadCreate(osThread(gsmBufferTask), NULL);
+    if ((gsmTaskHandle == NULL) || (gsmBufferTaskHandle == NULL) || (gsmMutexID == NULL))
+      break;
+    #if (_GSM_DTMF_DETECT_ENABLE == 1)
+    osMessageQDef(GsmDtmfQueue, 8, uint8_t);
+    gsmDtmfQueueHandle = osMessageCreate(osMessageQ(GsmDtmfQueue), NULL);
+    if (gsmDtmfQueueHandle == NULL)
+      break;
+    #endif
+    return true;      
+  }
+  while(0);
+  return false;
 }
