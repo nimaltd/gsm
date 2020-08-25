@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.1.0
+  Version:    4.1.1
   
   
   Reversion History:
+  
+  (4.1.1)
+  Add FTP Upload,DeleteDir,CreateDIR.
   
   (4.1.0)
   Add GPRS. Change somethings. Improve performance.
@@ -97,6 +100,29 @@ typedef enum
   
 }Gsm_Msg_Store_t;
 
+typedef enum
+{
+  Gsm_Ftp_Error_None = 0,
+  Gsm_Ftp_Error_Error = 1,
+  Gsm_Ftp_Error_NetError = 61,
+  Gsm_Ftp_Error_DNSError = 62,
+  Gsm_Ftp_Error_ConnectError = 63,
+  Gsm_Ftp_Error_Timeout = 64,
+  Gsm_Ftp_Error_ServerError = 65,
+  Gsm_Ftp_Error_OperationNotAllow = 66,
+  Gsm_Ftp_Error_ReplayError = 70,
+  Gsm_Ftp_Error_UserError = 71,
+  Gsm_Ftp_Error_PasswordError = 72,
+  Gsm_Ftp_Error_TypeError = 73,
+  Gsm_Ftp_Error_RestError = 74,
+  Gsm_Ftp_Error_PassiveError = 75,
+  Gsm_Ftp_Error_ActiveError = 76,
+  Gsm_Ftp_Error_OperateError = 77,
+  Gsm_Ftp_Error_UploadError = 78,
+  Gsm_Ftp_Error_DownloadError = 79,
+  Gsm_Ftp_Error_ManualQuit = 86,  
+  
+}Gsm_Ftp_Error_t;
 
 typedef struct
 {
@@ -139,7 +165,8 @@ typedef struct
 
 typedef struct
 {
-  bool            open;
+  bool            connected;
+  bool            connectedLast;
   char            ip[16];
   uint32_t        dataLen;
   uint32_t        dataCurrent;
@@ -211,15 +238,23 @@ bool            gsm_call_end(void);
 bool            gsm_call_dial(const char* number, uint8_t waitSecond);
 //###################################################################   gprs functions
 bool            gsm_gprs_setApName(char *apName);
-bool            gsm_gprs_open(void);
-bool            gsm_gprs_close(void);
+bool            gsm_gprs_connect(void);
+bool            gsm_gprs_disconnect(void);
+
 int16_t         gsm_gprs_httpGet(char *url);
 int16_t         gsm_gprs_httpPost(char *url);
 uint16_t        gsm_gprs_httpRead(uint16_t len);
 bool            gsm_gprs_httpTerminate(void);
-bool            gsm_gprs_ftpParameters(char *ftpAddress, char *ftpUserName, char *ftpPassword, uint16_t port);
-bool            gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len);
+
+bool            gsm_gprs_ftpLogin(char *ftpAddress, char *ftpUserName, char *ftpPassword, uint16_t port);
+Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len);
 bool            gsm_gprs_ftpUploadEnd(void);
+Gsm_Ftp_Error_t gsm_gprs_ftpCreateDir(const char *path);
+Gsm_Ftp_Error_t gsm_gprs_ftpRemoveDir(const char *path);
+uint32_t        gsm_gprs_ftpGetSize(const char *path, const char *name);
+Gsm_Ftp_Error_t gsm_gprs_ftpRemove(const char *path, const char *name);
+bool            gsm_gprs_ftpIsBusy(void);
+bool            gsm_gprs_ftpQuit(void);
 //###################################################################   bluetooth functions
 
 //###################################################################   library callback functions
@@ -232,6 +267,8 @@ void            gsm_callback_newCall(char *number);
 void            gsm_callback_endCall(void);
 void            gsm_callback_nowAnswer(void);
 void            gsm_callback_dtmf(char key);
+void            gsm_callback_gprsDisconnected(void);
+void            gsm_callback_gprsConnected(void);
 //###################################################################
 
 

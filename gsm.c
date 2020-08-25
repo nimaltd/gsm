@@ -17,7 +17,6 @@ const char            *_GSM_ALWAYS_SEARCH[] =
   "\r\nNO CARRIER\r\n",       //  3
   "\r\n+DTMF:",               //  4
   "\r\n+CREG:",               //  5
-  "\r\n+SAPBR 1: DEACT\r\n",  //  6
 };
 //#############################################################################################
 void                  gsm_init_config(void);
@@ -107,12 +106,7 @@ void gsm_at_checkRxBuffer(void)
               gsm.registred = 1;    
             else
               gsm.registred = 0;    
-          break;
-          case 6:   //  found   "\r\n+SAPBR 1: DEACT\r\n"
-            #if (_GSM_GPRS_ENABLE == 1)
-            gsm.gprs.open = false;
-            #endif
-          break;          
+          break;         
         }
       }
     //  --- search always 
@@ -148,8 +142,7 @@ void gsm_at_sendData(const uint8_t *data, uint16_t len)
 //#############################################################################################
 uint8_t gsm_at_sendCommand(const char *command, uint32_t waitMs, char *answer, uint16_t sizeOfAnswer, uint8_t items, ...)
 {
-  if (osMutexWait(gsmMutexID, portMAX_DELAY) != osOK)
-    return 0;
+  osMutexWait(gsmMutexID, portMAX_DELAY);
   va_list tag;
   va_start (tag, items);
   for (uint8_t i = 0; i < items; i++)
@@ -498,6 +491,7 @@ void gsm_task(void const * argument)
   static uint32_t gsm10sTimer = 0;
   static uint32_t gsm60sTimer = 0;
   static uint8_t  gsmError = 0;
+  char str[32];
   while (HAL_GetTick() < 2000)
     osDelay(100);
   gsm_power(true);
@@ -549,6 +543,38 @@ void gsm_task(void const * argument)
         }
         else
           gsmError = 0;
+        #if (_GSM_GPRS_ENABLE == 1)
+        if (gsm_at_sendCommand("AT+SAPBR=2,1\r\n", 1000 , str, sizeof(str), 2, "\r\n+SAPBR: 1,", "\r\nERROR\r\n") == 1)
+        {
+          if (sscanf(str, "\r\n+SAPBR: 1,1,\"%[^\"\r\n]", gsm.gprs.ip) == 1)
+          {
+            if (gsm.gprs.connectedLast == false)
+            {
+              gsm.gprs.connected = true;  
+              gsm.gprs.connectedLast = true;
+              gsm_callback_gprsConnected();
+            }
+          }
+          else
+          {
+            if (gsm.gprs.connectedLast == true)
+            {
+              gsm.gprs.connected = false;  
+              gsm.gprs.connectedLast = false;
+              gsm_callback_gprsDisconnected();
+            }
+          }
+        }
+        else
+        {
+          if (gsm.gprs.connectedLast == true)
+          {
+            gsm.gprs.connected = false;  
+            gsm.gprs.connectedLast = false;
+            gsm_callback_gprsDisconnected();
+          }
+        }
+        #endif
       }
       if (HAL_GetTick() - gsm60sTimer >= 60000) //  60 seconds timer
       {
