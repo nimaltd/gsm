@@ -39,16 +39,20 @@ __weak void gsm_callback_endCall(void)
 //#################################################################################
 __weak void gsm_callback_dtmf(char key)
 {
-  printf("\r\n-----DTMF : %c\r\n", key);
+  
 }
 //#################################################################################
 __weak void gsm_callback_gprsDisconnected(void)
 {
-  printf("\r\n----calback  disconnect\r\n");
+  gsm_gprs_connect();
 }
 //#################################################################################
 __weak void gsm_callback_gprsConnected(void)
 {
-  printf("\r\n----calback  connect\r\n");
+  
 }
 //#################################################################################
+__weak void gsm_callback_gprsGotData(uint8_t *data, uint16_t len)
+{
+  
+}

@@ -172,6 +172,8 @@ typedef struct
   uint32_t        dataCurrent;
   int16_t         code;
   uint8_t         buff[_GSM_RXSIZE];
+  uint8_t         tcpConnection;
+  uint8_t         gotData;
   
 }Gsm_Gprs_t;
 
@@ -197,6 +199,7 @@ typedef struct
 }Gsm_t;
 
 //###################################################################
+extern          osThreadId  gsmTaskHandle;
 extern          Gsm_t       gsm;
 //###################################################################   at commands
 void            gsm_at_rxCallback(void);
@@ -241,9 +244,13 @@ bool            gsm_gprs_setApName(char *apName);
 bool            gsm_gprs_connect(void);
 bool            gsm_gprs_disconnect(void);
 
-int16_t         gsm_gprs_httpGet(char *url);
-int16_t         gsm_gprs_httpPost(char *url);
-uint16_t        gsm_gprs_httpRead(uint16_t len);
+bool            gsm_gprs_httpInit(void);
+bool            gsm_gprs_httpSetContent(const char *content);
+bool            gsm_gprs_httpSetUserData(const char *data);
+bool            gsm_gprs_httpSendData(const char *data, uint16_t timeoutMs);
+int16_t         gsm_gprs_httpGet(const char *url, bool ssl, uint16_t timeoutMs);
+int16_t         gsm_gprs_httpPost(const char *url, bool ssl, uint16_t timeoutMs);
+uint16_t        gsm_gprs_httpRead(uint16_t len);  //  data into gsm.gprs.buff
 bool            gsm_gprs_httpTerminate(void);
 
 bool            gsm_gprs_ftpLogin(char *ftpAddress, char *ftpUserName, char *ftpPassword, uint16_t port);
@@ -255,6 +262,9 @@ uint32_t        gsm_gprs_ftpGetSize(const char *path, const char *name);
 Gsm_Ftp_Error_t gsm_gprs_ftpRemove(const char *path, const char *name);
 bool            gsm_gprs_ftpIsBusy(void);
 bool            gsm_gprs_ftpQuit(void);
+
+bool            gsm_gprs_tcpConnect(const char *address, uint16_t port, bool ssl);
+bool            gsm_gprs_tcpSend(const uint8_t *data, uint16_t len);
 //###################################################################   bluetooth functions
 
 //###################################################################   library callback functions
@@ -269,6 +279,7 @@ void            gsm_callback_nowAnswer(void);
 void            gsm_callback_dtmf(char key);
 void            gsm_callback_gprsDisconnected(void);
 void            gsm_callback_gprsConnected(void);
+void            gsm_callback_gprsGotData(uint8_t *data, uint16_t len);
 //###################################################################
 
 

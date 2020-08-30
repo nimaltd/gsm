@@ -43,51 +43,122 @@ bool gsm_gprs_disconnect(void)
   return false;
 }
 //#############################################################################################
-int16_t gsm_gprs_httpGet(char *url)
+bool gsm_gprs_httpInit(void)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  if (gsm_at_sendCommand("AT+HTTPINIT\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  return true;
+}
+//#############################################################################################
+bool gsm_gprs_httpSetContent(const char *content)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  char str[strlen(content) + 32];
+  sprintf(str, "AT+HTTPPARA=\"CONTENT\",\"%s\"\r\n", content);
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  return true;
+}
+//#############################################################################################
+bool gsm_gprs_httpSetUserData(const char *data)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  osThreadSuspend(gsmTaskHandle);
+  osDelay(100);
+  gsm_at_sendString("AT+HTTPPARA=\"USERDATA\",\"");
+  gsm_at_sendString(data);
+  if (gsm_at_sendCommand("\"\r\n", 1000, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+  {
+    osThreadResume(gsmTaskHandle);
+    return false;
+  }
+  osThreadResume(gsmTaskHandle);
+  return true;  
+}
+//#############################################################################################
+bool gsm_gprs_httpSendData(const char *data, uint16_t timeoutMs)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  char str[32];
+  sprintf(str, "AT+HTTPDATA=%d,%d\r\n", strlen(data), timeoutMs);
+  osThreadSuspend(gsmTaskHandle);
+  osDelay(100);
+  do
+  {
+    if (gsm_at_sendCommand(str, timeoutMs, NULL, 0, 2, "\r\nDOWNLOAD\r\n", "\r\nERROR\r\n") != 1)
+      break;        
+    if (gsm_at_sendCommand(data, timeoutMs, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      break;    
+    osDelay(timeoutMs);  
+    osThreadResume(gsmTaskHandle);
+    return true;
+  }
+  while(0);
+  osThreadResume(gsmTaskHandle);
+  return false;
+}
+//#############################################################################################
+int16_t gsm_gprs_httpGet(const char *url, bool ssl, uint16_t timeoutMs)
 {
   if (gsm.gprs.connected == false)
     return -1;
   gsm.gprs.code = -1;
   gsm.gprs.dataLen = 0;
-  gsm_at_sendCommand("AT+HTTPTERM\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
-  if (gsm_at_sendCommand("AT+HTTPINIT\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return gsm.gprs.code;
   if (gsm_at_sendCommand("AT+HTTPPARA=\"CID\",1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
-  char str[128];
+  char str[strlen(url) + 32];
   sprintf(str, "AT+HTTPPARA=\"URL\",\"%s\"\r\n", url);
   if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
   if (gsm_at_sendCommand("AT+HTTPPARA=\"REDIR\",1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
-  if (gsm_at_sendCommand("AT+HTTPSSL=1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return gsm.gprs.code;
-  if (gsm_at_sendCommand("AT+HTTPACTION=0\r\n", 20000 , str, sizeof(str), 2, "\r\n+HTTPACTION:", "\r\nERROR\r\n") != 1)
+  if (ssl)
+  {
+    if (gsm_at_sendCommand("AT+HTTPSSL=1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return gsm.gprs.code;
+  }
+  else
+  {
+    if (gsm_at_sendCommand("AT+HTTPSSL=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return gsm.gprs.code;
+  }
+  if (gsm_at_sendCommand("AT+HTTPACTION=0\r\n", timeoutMs , str, sizeof(str), 2, "\r\n+HTTPACTION:", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
   sscanf(str, "\r\n+HTTPACTION: 0,%hd,%d\r\n", &gsm.gprs.code, &gsm.gprs.dataLen);
   return gsm.gprs.code;
+
 }  
 //#############################################################################################
-int16_t gsm_gprs_httpPost(char *url)
+int16_t gsm_gprs_httpPost(const char *url, bool ssl, uint16_t timeoutMs)
 {
   if (gsm.gprs.connected == false)
     return -1;
   gsm.gprs.code = -1;
   gsm.gprs.dataLen = 0;
-  gsm_at_sendCommand("AT+HTTPTERM\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
-  if (gsm_at_sendCommand("AT+HTTPINIT\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return gsm.gprs.code;
   if (gsm_at_sendCommand("AT+HTTPPARA=\"CID\",1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
-  char str[128];
+  char str[strlen(url) + 32];
   sprintf(str, "AT+HTTPPARA=\"URL\",\"%s\"\r\n", url);
   if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
   if (gsm_at_sendCommand("AT+HTTPPARA=\"REDIR\",1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
-  if (gsm_at_sendCommand("AT+HTTPSSL=1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return gsm.gprs.code;
-  if (gsm_at_sendCommand("AT+HTTPACTION=1\r\n", 20000 , str, sizeof(str), 2, "\r\n+HTTPACTION:", "\r\nERROR\r\n") != 1)
+  if (ssl)
+  {
+    if (gsm_at_sendCommand("AT+HTTPSSL=1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return gsm.gprs.code;
+  }
+  else
+  {
+    if (gsm_at_sendCommand("AT+HTTPSSL=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return gsm.gprs.code;
+  }
+  if (gsm_at_sendCommand("AT+HTTPACTION=1\r\n", timeoutMs , str, sizeof(str), 2, "\r\n+HTTPACTION:", "\r\nERROR\r\n") != 1)
     return gsm.gprs.code;
   sscanf(str, "\r\n+HTTPACTION: 1,%hd,%d\r\n", &gsm.gprs.code, &gsm.gprs.dataLen);
   return gsm.gprs.code;
@@ -202,10 +273,12 @@ Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path
   s++;
   if (atoi(s) != len)
     return Gsm_Ftp_Error_Error;
+  osThreadSuspend(gsmTaskHandle);
   osDelay(1000);
   gsm_at_sendData(data, len);
   gsm_at_sendCommand("\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
   osDelay(100);
+  osThreadResume(gsmTaskHandle);
   return Gsm_Ftp_Error_None;
 }  
 //#############################################################################################
@@ -318,4 +391,71 @@ bool gsm_gprs_ftpQuit(void)
   return true;       
 }
 //#############################################################################################
+bool gsm_gprs_tcpConnect(const char *address, uint16_t port, bool ssl)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  if (gsm_at_sendCommand("AT+CIPMUX=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  if (ssl)
+  {
+    if (gsm_at_sendCommand("AT+SSLOPT=1,1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
+    if (gsm_at_sendCommand("AT+CIPSSL=1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
+  }
+  else
+  {
+    if (gsm_at_sendCommand("AT+CIPSSL=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
+  }
+  char str[128];  
+  sprintf(str, "AT+CIPSTART=\"TCP\",\"%s\",\"%d\"\r\n", address, port);
+  uint8_t answer = gsm_at_sendCommand(str, 160000 , NULL, 0, 4, "\r\nCONNECT OK\r\n", "\r\nALREADY CONNECT\r\n", "\r\nCONNECT FAIL\r\n", "\r\nERROR\r\n");
+  if ((answer == 1) || (answer == 2))
+  {
+    gsm.gprs.tcpConnection = 1;
+    return true;
+  }
+  return false;  
+}
+//#############################################################################################
+bool gsm_gprs_tcpSend(const uint8_t *data, uint16_t len)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  if (gsm.gprs.tcpConnection == 0)
+    return false;
+  char str[32];
+  bool err = false;
+  osThreadSuspend(gsmTaskHandle);
+  osDelay(100);
+  do
+  {
+    sprintf(str, "AT+CIPSEND=%d\r\n", len);
+    if (gsm_at_sendCommand(str, 10000 , NULL, 0, 2, "\r\n>", "\r\nERROR\r\n") != 1)
+      break;
+    osDelay(500);
+    gsm_at_sendData(data, len);
+    if (gsm_at_sendCommand("", 10000 , NULL, 0, 2, "\r\nSEND OK\r\n", "\r\nERROR\r\n") != 1)
+      break;
+    err = true;    
+  }while(0);
+  osThreadResume(gsmTaskHandle);
+  return err;
+}  
+//#############################################################################################
+bool gsm_gprs_tcpClose(void)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  if (gsm_at_sendCommand("AT+CIPCLOSE\r\n", 10000 , NULL, 0, 2, "\r\nCLOSE OK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  gsm.gprs.tcpConnection = 0;
+  return true;
+}  
+//#############################################################################################
+
+//#############################################################################################
+
 #endif

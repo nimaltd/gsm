@@ -17,6 +17,9 @@ const char            *_GSM_ALWAYS_SEARCH[] =
   "\r\nNO CARRIER\r\n",       //  3
   "\r\n+DTMF:",               //  4
   "\r\n+CREG:",               //  5
+  "\r\nCLOSED\r\n",           //  6
+  "\r\n+CIPRXGET: 1\r\n",     //  7
+    
 };
 //#############################################################################################
 void                  gsm_init_config(void);
@@ -107,6 +110,16 @@ void gsm_at_checkRxBuffer(void)
             else
               gsm.registred = 0;    
           break;         
+          case 6:   //  found   "\r\nCLOSED\r\n"
+            #if (_GSM_GPRS_ENABLE == 1)            
+            gsm.gprs.tcpConnection = 0;
+            #endif
+          break;
+          case 7:   //  found   "\r\n+CIPRXGET: 1\r\n"
+            #if (_GSM_GPRS_ENABLE == 1)            
+            gsm.gprs.gotData = 1;
+            #endif
+          break;
         }
       }
     //  --- search always 
@@ -436,7 +449,7 @@ bool gsm_dtmf(char *string, uint32_t durationMiliSecond)
 //#############################################################################################
 void gsm_init_config(void)
 {
-  char str1[32];
+  char str1[64];
   char str2[16];
   gsm_setDefault();
   gsm_at_sendCommand("ATE1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
@@ -444,6 +457,12 @@ void gsm_init_config(void)
   gsm_at_sendCommand("AT+CLIP=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+CREG=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
   gsm_at_sendCommand("AT+FSHEX=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  #if (_GSM_GPRS_ENABLE == 1)
+  gsm_at_sendCommand("AT+CIPSHUT\r\n", 65000, NULL, 0, 2, "\r\nSHUT OK\r\n", "\r\nERROR\r\n");
+  gsm_at_sendCommand("AT+CIPHEAD=0\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  gsm_at_sendCommand("AT+CIPRXGET=1\r\n", 1000, NULL, 0, 1, "\r\nOK\r\n");
+  #endif
+  gsm_getVersion(str1, sizeof(str1));
   osDelay(2000);
   for (uint8_t i = 0; i < 5 ; i++)
   {
@@ -525,6 +544,24 @@ void gsm_task(void const * argument)
         gsm.call.callbackEndCall = 0;
         gsm_callback_endCall();
         gsm.call.busy = 0;
+      }
+      #endif
+      #if (_GSM_GPRS_ENABLE == 1)
+      if (gsm.gprs.gotData == 1)
+      {
+        gsm.gprs.gotData = 0;
+        memset(gsm.gprs.buff, 0, sizeof(gsm.gprs.buff));
+        sprintf(str, "AT+CIPRXGET=2,%d\r\n", sizeof(gsm.gprs.buff) - 16);
+        if (gsm_at_sendCommand(str, 1000, (char*)gsm.gprs.buff, sizeof(gsm.gprs.buff), 2, "\r\n+CIPRXGET: 2", "\r\nERROR\r\n") == 1)
+        {
+          uint16_t len = 0, read = 0;
+          if (sscanf((char*)gsm.gprs.buff, "\r\n+CIPRXGET: 2,%hd,%hd\r\n", &len, &read) == 2)
+          {
+            
+            gsm_callback_gprsGotData(gsm.gprs.buff, len);
+          }
+        }
+        
       }
       #endif
       if (HAL_GetTick() - gsm10sTimer >= 10000) //  10 seconds timer

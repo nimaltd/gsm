@@ -19,6 +19,6 @@
 #define   _GSM_TASKSIZE             512  
 #define   _GSM_BUFFTASKSIZE         128
 #define   _GSM_RXSIZE               512  
-#define   _GSM_RXTIMEOUT            100  
+#define   _GSM_RXTIMEOUT            10  
 
 #endif
