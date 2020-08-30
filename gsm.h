@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.1.1
+  Version:    4.1.2
   
   
   Reversion History:
+  
+  (4.1.2)
+  Add NTP.
   
   (4.1.1)
   Add FTP Upload,DeleteDir,CreateDIR.
@@ -265,6 +268,9 @@ bool            gsm_gprs_ftpQuit(void);
 
 bool            gsm_gprs_tcpConnect(const char *address, uint16_t port, bool ssl);
 bool            gsm_gprs_tcpSend(const uint8_t *data, uint16_t len);
+
+bool            gsm_gprs_ntpServer(char *server);
+bool            gsm_gprs_ntpGetTime(char *timeString);
 //###################################################################   bluetooth functions
 
 //###################################################################   library callback functions

@@ -455,7 +455,31 @@ bool gsm_gprs_tcpClose(void)
   return true;
 }  
 //#############################################################################################
-
+bool gsm_gprs_ntpServer(char *server)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  char str[64];
+  sprintf(str, "AT+CNTP=\"%s\",0\r\n", server);
+  if (gsm_at_sendCommand(str, 10000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  return true;  
+}
+//#############################################################################################
+bool gsm_gprs_ntpGetTime(char *timeString)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  if (timeString == NULL)
+    return false;
+  char str[32];
+  if (gsm_at_sendCommand("AT+CNTP\r\n", 10000 , NULL, 0, 2, "\r\n+CNTP: 1\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  if (gsm_at_sendCommand("AT+CCLK?\r\n", 10000 , str, sizeof(str), 2, "\r\n+CCLK:", "\r\nERROR\r\n") != 1)
+    return false;
+  sscanf(str, "\r\n+CCLK: \"%[^\"\r\n]", timeString);
+  return true;
+}
 //#############################################################################################
 
 #endif
