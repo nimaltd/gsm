@@ -67,6 +67,8 @@ bool gsm_gprs_httpSetUserData(const char *data)
 {
   if (gsm.gprs.connected == false)
     return false;
+  while (gsm.taskBusy == 1)
+    osDelay(1);
   osThreadSuspend(gsmTaskHandle);
   osDelay(100);
   gsm_at_sendString("AT+HTTPPARA=\"USERDATA\",\"");
@@ -86,6 +88,8 @@ bool gsm_gprs_httpSendData(const char *data, uint16_t timeoutMs)
     return false;
   char str[32];
   sprintf(str, "AT+HTTPDATA=%d,%d\r\n", strlen(data), timeoutMs);
+  while (gsm.taskBusy == 1)
+    osDelay(1);
   osThreadSuspend(gsmTaskHandle);
   osDelay(100);
   do
@@ -231,13 +235,14 @@ bool gsm_gprs_ftpLogin(char *ftpAddress, char *ftpUserName, char *ftpPassword, u
   return true;
 }  
 //#############################################################################################
-Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len)
+Gsm_Ftp_Error_t gsm_gprs_ftpUploadBegin(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len)
 {
   if (gsm.gprs.connected == false)
     return Gsm_Ftp_Error_Error;
   char *s;
   char str[128];  
   char answer[64];
+  gsm_at_sendCommand("AT+FTPEXTPUT=0\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
   if (asciiFile)
     sprintf(str, "AT+FTPTYPE=\"A\"\r\n");
   else
@@ -255,7 +260,7 @@ Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path
     return Gsm_Ftp_Error_Error;
   sprintf(str, "AT+FTPPUTNAME=\"%s\"\r\n", fileName);
   if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return Gsm_Ftp_Error_Error;
+    return Gsm_Ftp_Error_Error;  
   if (gsm_at_sendCommand("AT+FTPPUT=1\r\n", 75000 , answer, sizeof(answer), 2, "\r\n+FTPPUT: 1,", "\r\nERROR\r\n") != 1)
     return Gsm_Ftp_Error_Error;
   s = strchr(answer, ',');
@@ -265,7 +270,7 @@ Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path
   if (atoi(s) != 1)
     return (Gsm_Ftp_Error_t)atoi(s);
   sprintf(str, "AT+FTPPUT=2,%d\r\n", len); 
-  if (gsm_at_sendCommand(str, 75000 , answer, sizeof(answer), 2, "\r\n+FTPPUT: 2,", "\r\nERROR\r\n") != 1)
+  if (gsm_at_sendCommand(str, 5000 , answer, sizeof(answer), 2, "\r\n+FTPPUT: 2,", "\r\nERROR\r\n") != 1)
     return Gsm_Ftp_Error_Error;
   s = strchr(answer, ',');
   if (s == NULL)
@@ -273,11 +278,38 @@ Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path
   s++;
   if (atoi(s) != len)
     return Gsm_Ftp_Error_Error;
+  while (gsm.taskBusy == 1)
+    osDelay(1);
   osThreadSuspend(gsmTaskHandle);
-  osDelay(1000);
-  gsm_at_sendData(data, len);
-  gsm_at_sendCommand("\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
   osDelay(100);
+  gsm_at_sendData(data, len);
+  gsm_at_sendCommand("", 120 * 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
+  osThreadResume(gsmTaskHandle);
+  return Gsm_Ftp_Error_None;
+}
+//#############################################################################################
+Gsm_Ftp_Error_t gsm_gprs_ftpUpload(const uint8_t *data, uint16_t len)
+{
+  if (gsm.gprs.connected == false)
+    return Gsm_Ftp_Error_Error;
+  char *s;
+  char str[128];  
+  char answer[64];
+  sprintf(str, "AT+FTPPUT=2,%d\r\n", len); 
+  if (gsm_at_sendCommand(str, 5000 , answer, sizeof(answer), 2, "\r\n+FTPPUT: 2,", "\r\nERROR\r\n") != 1)
+    return Gsm_Ftp_Error_Error;
+  s = strchr(answer, ',');
+  if (s == NULL)
+    return Gsm_Ftp_Error_Error;
+  s++;
+  if (atoi(s) != len)
+    return Gsm_Ftp_Error_Error;
+  while (gsm.taskBusy == 1)
+    osDelay(1);
+  osThreadSuspend(gsmTaskHandle);
+  osDelay(100);
+  gsm_at_sendData(data, len);
+  gsm_at_sendCommand("", 120 * 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
   osThreadResume(gsmTaskHandle);
   return Gsm_Ftp_Error_None;
 }  
@@ -289,6 +321,86 @@ bool gsm_gprs_ftpUploadEnd(void)
   if (gsm_at_sendCommand("AT+FTPPUT=2,0\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
     return false;
   return true;     
+}
+//#############################################################################################
+bool gsm_gprs_ftpExtUploadBegin(bool asciiFile, bool append, const char *path, const char *fileName)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  char str[128];  
+  gsm_at_sendCommand("AT+FTPEXTPUT=0\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
+  if (asciiFile)
+    sprintf(str, "AT+FTPTYPE=\"A\"\r\n");
+  else
+    sprintf(str, "AT+FTPTYPE=\"I\"\r\n");
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  if (append)
+    sprintf(str, "AT+FTPPUTOPT=\"APPE\"\r\n");
+  else
+    sprintf(str, "AT+FTPPUTOPT=\"STOR\"\r\n");
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  sprintf(str, "AT+FTPPUTPATH=\"%s\"\r\n", path);
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  sprintf(str, "AT+FTPPUTNAME=\"%s\"\r\n", fileName);
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;  
+  if (gsm_at_sendCommand("AT+FTPEXTPUT=1\r\n", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return false;
+  gsm.gprs.ftpExtOffset = 0;
+  return true;
+}
+//#############################################################################################
+bool gsm_gprs_ftpExtUpload(uint8_t *data, uint16_t len)
+{
+  if (gsm.gprs.connected == false)
+    return false;
+  char str[64];  
+  char answer[64];  
+  while (gsm.taskBusy == 1)
+    osDelay(1);
+  osThreadSuspend(gsmTaskHandle);
+  do
+  {
+    sprintf(str, "AT+FTPEXTPUT=2,%d,%d,5000\r\n", gsm.gprs.ftpExtOffset, len);
+    if (gsm_at_sendCommand(str, 5000, answer, sizeof(answer), 2, "\r\n+FTPEXTPUT: ", "\r\nERROR\r\n") != 1)
+      break;
+    char *s = strchr(answer, ',');
+    if (s == NULL)
+      break;
+    s++;
+    uint32_t d = atoi(s);
+    if (d != len)
+      break;
+    osDelay(100);
+    gsm_at_sendData(data, len);
+    if (gsm_at_sendCommand("", 5000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      break; 
+    gsm.gprs.ftpExtOffset += len;
+    osThreadResume(gsmTaskHandle);
+    return true;
+  }
+  while(0);
+  osThreadResume(gsmTaskHandle);
+  return false;
+}
+//#############################################################################################
+Gsm_Ftp_Error_t gsm_gprs_ftpExtUploadEnd(void)
+{
+  if (gsm.gprs.connected == false)
+    return Gsm_Ftp_Error_Error;
+  char answer[64];  
+  if (gsm_at_sendCommand("AT+FTPPUT=1\r\n", 75000, answer, sizeof(answer), 2, "\r\n+FTPPUT: 1,", "\r\nERROR\r\n") != 1)
+    return Gsm_Ftp_Error_Error;
+  char *s = strchr(answer, ',');
+  if (s == NULL)
+    return Gsm_Ftp_Error_Error;
+  s++;
+  Gsm_Ftp_Error_t e = (Gsm_Ftp_Error_t)atoi(s);
+  gsm_at_sendCommand("AT+FTPEXTPUT=0\r\n", 1000, NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
+  return e;
 }
 //#############################################################################################
 Gsm_Ftp_Error_t gsm_gprs_ftpCreateDir(const char *path)
@@ -428,6 +540,8 @@ bool gsm_gprs_tcpSend(const uint8_t *data, uint16_t len)
     return false;
   char str[32];
   bool err = false;
+  while (gsm.taskBusy == 1)
+    osDelay(1);
   osThreadSuspend(gsmTaskHandle);
   osDelay(100);
   do

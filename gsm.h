@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.1.2
+  Version:    4.1.3
   
   
   Reversion History:
+  
+  (4.1.3)
+  Fix FTPPUT, Add FTPEXTPUT
   
   (4.1.2)
   Add NTP.
@@ -177,6 +180,7 @@ typedef struct
   uint8_t         buff[_GSM_RXSIZE];
   uint8_t         tcpConnection;
   uint8_t         gotData;
+  uint32_t        ftpExtOffset;
   
 }Gsm_Gprs_t;
 
@@ -187,7 +191,7 @@ typedef struct
   uint8_t       started;
   uint8_t       registred;
   uint8_t       signal; 
-  
+  uint8_t       taskBusy;
   Gsm_At_t      at;
   #if (_GSM_MSG_ENABLE == 1)
   Gsm_Msg_t     msg;
@@ -257,8 +261,12 @@ uint16_t        gsm_gprs_httpRead(uint16_t len);  //  data into gsm.gprs.buff
 bool            gsm_gprs_httpTerminate(void);
 
 bool            gsm_gprs_ftpLogin(char *ftpAddress, char *ftpUserName, char *ftpPassword, uint16_t port);
-Gsm_Ftp_Error_t gsm_gprs_ftpUpload(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len);
+Gsm_Ftp_Error_t gsm_gprs_ftpUploadBegin(bool asciiFile, bool append, const char *path, const char *fileName, const uint8_t *data, uint16_t len);
+Gsm_Ftp_Error_t gsm_gprs_ftpUpload(const uint8_t *data, uint16_t len);
 bool            gsm_gprs_ftpUploadEnd(void);
+bool            gsm_gprs_ftpExtUploadBegin(bool asciiFile, bool append, const char *path, const char *fileName);
+bool            gsm_gprs_ftpExtUpload(uint8_t *data, uint16_t len);
+Gsm_Ftp_Error_t gsm_gprs_ftpExtUploadEnd(void);
 Gsm_Ftp_Error_t gsm_gprs_ftpCreateDir(const char *path);
 Gsm_Ftp_Error_t gsm_gprs_ftpRemoveDir(const char *path);
 uint32_t        gsm_gprs_ftpGetSize(const char *path, const char *name);

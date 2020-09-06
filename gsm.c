@@ -535,20 +535,25 @@ void gsm_task(void const * argument)
       osEvent event = osMessageGet(gsmDtmfQueueHandle, 0);
       if (event.status == osEventMessage)
       {
+        gsm.taskBusy = 1;
         gsm_callback_dtmf((char)event.value.v);
+        gsm.taskBusy = 0;
       }
       #endif
       #if (_GSM_CALL_ENABLE == 1)
       if (gsm.call.callbackEndCall == 1)  // \r\nNO CARRIER\r\n detect
       {
+        gsm.taskBusy = 1;
         gsm.call.callbackEndCall = 0;
         gsm_callback_endCall();
         gsm.call.busy = 0;
+        gsm.taskBusy = 0;
       }
       #endif
       #if (_GSM_GPRS_ENABLE == 1)
       if (gsm.gprs.gotData == 1)
       {
+        gsm.taskBusy = 1;
         gsm.gprs.gotData = 0;
         memset(gsm.gprs.buff, 0, sizeof(gsm.gprs.buff));
         sprintf(str, "AT+CIPRXGET=2,%d\r\n", sizeof(gsm.gprs.buff) - 16);
@@ -561,12 +566,13 @@ void gsm_task(void const * argument)
             gsm_callback_gprsGotData(gsm.gprs.buff, len);
           }
         }
-        
+        gsm.taskBusy = 0;        
       }
       #endif
       if (HAL_GetTick() - gsm10sTimer >= 10000) //  10 seconds timer
       {
         gsm10sTimer = HAL_GetTick();
+        gsm.taskBusy = 1;
         if ((gsm_getSignalQuality_0_to_100() < 20) || (gsm.registred == 0)) //  update signal value every 10 seconds
         {
           gsmError++;
@@ -577,10 +583,12 @@ void gsm_task(void const * argument)
             gsm_power(true);
             gsmError = 0;
           }
+          gsm.taskBusy = 0;
         }
         else
           gsmError = 0;
         #if (_GSM_GPRS_ENABLE == 1)
+        gsm.taskBusy = 1;
         if (gsm_at_sendCommand("AT+SAPBR=2,1\r\n", 1000 , str, sizeof(str), 2, "\r\n+SAPBR: 1,", "\r\nERROR\r\n") == 1)
         {
           if (sscanf(str, "\r\n+SAPBR: 1,1,\"%[^\"\r\n]", gsm.gprs.ip) == 1)
@@ -611,12 +619,14 @@ void gsm_task(void const * argument)
             gsm_callback_gprsDisconnected();
           }
         }
+        gsm.taskBusy = 0;
         #endif
       }
       if (HAL_GetTick() - gsm60sTimer >= 60000) //  60 seconds timer
       {
         gsm60sTimer = HAL_GetTick();
         #if (_GSM_MSG_ENABLE == 1)
+        gsm.taskBusy = 1;
         if (gsm_msg_getStorageUsed() > 0) //  check sms memory every 60 seconds
         {
           for (uint16_t i = 0; i < 150 ; i++)
@@ -628,9 +638,11 @@ void gsm_task(void const * argument)
             }
           }
         }
+        gsm.taskBusy = 0;
         #endif    
       }
       #if (_GSM_MSG_ENABLE == 1)
+      gsm.taskBusy = 1;
       if (gsm.msg.newMsg != -1)
       {
         if (gsm_msg_read(gsm.msg.newMsg))
@@ -640,18 +652,23 @@ void gsm_task(void const * argument)
         }        
         gsm.msg.newMsg = -1;
       }
+      gsm.taskBusy = 0;
       #endif
       #if (_GSM_CALL_ENABLE == 1)
+      gsm.taskBusy = 1;
       if (gsm.call.ringing == 1)
       {
         gsm_callback_newCall(gsm.call.number);
         gsm.call.ringing = 0;
       }      
+      gsm.taskBusy = 0;
       #endif
     }
     else
     {
+      gsm.taskBusy = 1;
       gsm_power(true);  //  turn on again, after power down
+      gsm.taskBusy = 0;
     }
     osDelay(10);
   }  
