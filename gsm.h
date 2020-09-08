@@ -7,10 +7,13 @@
   Instagram:  http://instagram.com/github.NimaLTD
   Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw
   
-  Version:    4.1.3
+  Version:    4.1.4
   
   
   Reversion History:
+  
+  (4.1.4)
+  Add gsm_gprs_ftpIsExistFolder(path) function
   
   (4.1.3)
   Fix FTPPUT, Add FTPEXTPUT
@@ -127,6 +130,7 @@ typedef enum
   Gsm_Ftp_Error_UploadError = 78,
   Gsm_Ftp_Error_DownloadError = 79,
   Gsm_Ftp_Error_ManualQuit = 86,  
+  Gsm_Ftp_Error_NotExist = 100,  
   
 }Gsm_Ftp_Error_t;
 
@@ -271,6 +275,7 @@ Gsm_Ftp_Error_t gsm_gprs_ftpCreateDir(const char *path);
 Gsm_Ftp_Error_t gsm_gprs_ftpRemoveDir(const char *path);
 uint32_t        gsm_gprs_ftpGetSize(const char *path, const char *name);
 Gsm_Ftp_Error_t gsm_gprs_ftpRemove(const char *path, const char *name);
+Gsm_Ftp_Error_t gsm_gprs_ftpIsExistFolder(const char *path);
 bool            gsm_gprs_ftpIsBusy(void);
 bool            gsm_gprs_ftpQuit(void);
 

@@ -485,6 +485,30 @@ Gsm_Ftp_Error_t gsm_gprs_ftpRemove(const char *path, const char *name)
   return (Gsm_Ftp_Error_t)atoi(s);
 }
 //#############################################################################################
+Gsm_Ftp_Error_t gsm_gprs_ftpIsExistFolder(const char *path)
+{
+  if (gsm.gprs.connected == false)
+    return Gsm_Ftp_Error_Error;
+  char str[strlen(path) + 16];  
+  char answer[32];  
+  sprintf(str, "AT+FTPGETPATH=\"%s\"\r\n", path);
+  if (gsm_at_sendCommand(str, 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+    return Gsm_Ftp_Error_Error;  
+  if (gsm_at_sendCommand("AT+FTPLIST=1\r\n", 75000 , answer, sizeof(answer), 2, "\r\n+FTPLIST: ", "\r\nERROR\r\n") != 1)
+    return Gsm_Ftp_Error_Error;    
+  uint8_t i1 = 0,i2 = 0;
+  if (sscanf(answer,"\r\n+FTPLIST: %hhd,%hhd", &i1, &i2) != 2)
+    return Gsm_Ftp_Error_Error;    
+  if (i1 == 1 && i2 == 1)
+  {
+    gsm_at_sendCommand("AT+FTPQUIT\r\n", 75000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n");
+    return Gsm_Ftp_Error_None;
+  }
+  if (i1 == 1 && i2 == 77)
+    return Gsm_Ftp_Error_NotExist; 
+  return Gsm_Ftp_Error_Error; 
+}
+//#############################################################################################
 bool gsm_gprs_ftpIsBusy(void)
 {
   if (gsm.gprs.connected == false)
