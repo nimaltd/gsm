@@ -694,9 +694,9 @@ bool gsm_init(osPriority osPriority_)
   {
     osMutexDef(gsmMutex); 
     gsmMutexID = osMutexCreate(osMutex (gsmMutex));
-    osThreadStaticDef(gsmTask, gsm_task, osPriority_, 0, _GSM_TASKSIZE, NULL, NULL);
+    osThreadDef(gsmTask, gsm_task, osPriority_, 0, _GSM_TASKSIZE);
     gsmTaskHandle = osThreadCreate(osThread(gsmTask), NULL);
-    osThreadStaticDef(gsmBufferTask, gsmBuffer_task, osPriority_, 0, _GSM_BUFFTASKSIZE, NULL, NULL);
+    osThreadDef(gsmBufferTask, gsmBuffer_task, osPriority_, 0, _GSM_BUFFTASKSIZE);
     gsmBufferTaskHandle = osThreadCreate(osThread(gsmBufferTask), NULL);
     if ((gsmTaskHandle == NULL) || (gsmBufferTaskHandle == NULL) || (gsmMutexID == NULL))
       break;
