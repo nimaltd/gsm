@@ -1,8 +1,9 @@
 ## GSM module library 
-[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O5O4221XY)
-* http://www.github.com/NimaLTD   
-* https://www.instagram.com/github.nimaltd/   
-* https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw   
+ *	Author:     Nima Askari
+ *	WebSite:    https://www.github.com/NimaLTD
+ *	Instagram:  https://www.instagram.com/github.NimaLTD
+ *	LinkedIn:   https://www.linkedin.com/in/NimaLTD
+ *	Youtube:    https://www.youtube.com/channel/UCUhY7qY1klJm1d2kulr9ckw 
 --------------------------------------------------------------------------------
 Not recommended for small devices
 --------------------------------------------------------------------------------
