@@ -531,8 +531,9 @@ bool gsm_gprs_tcpConnect(const char *address, uint16_t port, bool ssl)
 {
   if (gsm.gprs.connected == false)
     return false;
-  if (gsm_at_sendCommand("AT+CIPMUX=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
-    return false;
+  if(gsm_at_sendCommand("AT+CIPMUX?\r\n", 1000, NULL, 0, 1, "\r\n+CIPMUX: 0\r\n") != 1)
+    if (gsm_at_sendCommand("AT+CIPMUX=0\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
+      return false;
   if (ssl)
   {
     if (gsm_at_sendCommand("AT+SSLOPT=1,1\r\n", 1000 , NULL, 0, 2, "\r\nOK\r\n", "\r\nERROR\r\n") != 1)
